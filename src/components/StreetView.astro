@@ -1,0 +1,26 @@
+---
+import { streetViewEmbedUrl } from '../lib/properties';
+
+interface Props {
+  title: string;
+  address: string;
+  lat?: number;
+  lng?: number;
+  compact?: boolean;
+}
+
+const { title, address, lat, lng, compact = false } = Astro.props;
+const src = streetViewEmbedUrl(address, lat, lng);
+---
+
+<figure class:list={['overflow-hidden rounded-xl border border-line bg-panel', compact ? 'aspect-[16/10]' : 'aspect-[16/9]']}>
+  <iframe
+    class="h-full w-full border-0"
+    src={src}
+    title={`Google Street View of ${title}`}
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    allowfullscreen
+  ></iframe>
+  <figcaption class="sr-only">Street-level photo from Google Street View.</figcaption>
+</figure>

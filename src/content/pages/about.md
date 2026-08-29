@@ -1,12 +1,10 @@
 ---
 title: About
-description: West Cherokee Properties manages rental homes in Cartersville, Georgia.
+description: We are a small Cartersville landlord looking after a few homes we know well.
 ---
 
-We are a small, local owner-operator. Our job is to keep homes in good repair, treat every applicant the same way, and make rent and service requests straightforward.
+West Cherokee Properties is a small, local shop — not a regional management company. We take care of a handful of homes in Cartersville, keep them in good repair, and try to make rent and repairs straightforward once you live here.
 
-We currently manage three addresses in Cartersville:
+Downtown, we have the two-unit house at 124 W Cherokee Avenue and the cottage next door at 11 Noble Street. North of town, 10 Falcon Circle has two matching 2-bed units. When a place is open we use one application for every household. We do not ask for a Social Security number or protected-class information on that form.
 
-- 124 W Cherokee Ave — Unit A (2 bed, 1 bath) and Unit B (3 bed, 2 bath)
-- 11 Noble St — a single 2-bed, 1-bath home. For tax purposes it is part of 124 W Cherokee Ave, and it uses the same rental policies.
-- 10 Falcon Circle — Unit A and Unit B, each 2 bed, 1 bath
+Every home is leased today. If you want to hear when something opens, [write us](/contact). A property-specific waitlist is on our backlog.

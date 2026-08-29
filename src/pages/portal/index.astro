@@ -24,7 +24,7 @@ import PortalNav from '../../components/PortalNav.astro';
           el.textContent = `Signed in as ${json.person.email}.`;
         } else if (res.ok) {
           el.innerHTML =
-            'No lease is on file for this sign-in yet. <a href="/apply">Start an application</a> if you are looking for a home.';
+            'No lease is on file for this sign-in yet. If you already live with us, write <a href="/contact">the office</a> so we can link your account.';
         } else {
           el.textContent = json.error || 'Could not load portal.';
         }

@@ -1,8 +1,8 @@
 export const site = {
   name: 'West Cherokee Properties',
-  tagline: 'Homes you can count on',
+  tagline: 'A few good homes in Cartersville',
   description:
-    'West Cherokee Properties manages rental homes in Cartersville, Georgia — fair applications, clear leases, and a resident portal for rent and service requests.',
+    'We look after a handful of rental homes in Cartersville, Georgia — two downtown addresses near the square, and a quieter pair of units on Falcon Circle.',
   url: 'https://westcherokee.com',
   logoPath: '/logo.png',
   jobTitle: 'Property management',

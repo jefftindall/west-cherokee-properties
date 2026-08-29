@@ -28,9 +28,9 @@ export const SEEDED_PROPERTIES = [
 ];
 
 export const SEEDED_UNITS = [
-  { id: 'unit-124-w-cherokee-a', propertyId: 'prop-124-w-cherokee', label: 'A', bedrooms: 2, bathrooms: 1 },
-  { id: 'unit-124-w-cherokee-b', propertyId: 'prop-124-w-cherokee', label: 'B', bedrooms: 3, bathrooms: 2 },
-  { id: 'unit-11-noble', propertyId: 'prop-11-noble', label: 'Single Unit', bedrooms: 2, bathrooms: 1 },
-  { id: 'unit-10-falcon-a', propertyId: 'prop-10-falcon-circle', label: 'A', bedrooms: 2, bathrooms: 1 },
-  { id: 'unit-10-falcon-b', propertyId: 'prop-10-falcon-circle', label: 'B', bedrooms: 2, bathrooms: 1 },
+  { id: 'unit-124-w-cherokee-a', propertyId: 'prop-124-w-cherokee', label: 'A', bedrooms: 2, bathrooms: 1, available: false },
+  { id: 'unit-124-w-cherokee-b', propertyId: 'prop-124-w-cherokee', label: 'B', bedrooms: 3, bathrooms: 2, available: false },
+  { id: 'unit-11-noble', propertyId: 'prop-11-noble', label: 'Single Unit', bedrooms: 2, bathrooms: 1, available: false },
+  { id: 'unit-10-falcon-a', propertyId: 'prop-10-falcon-circle', label: 'A', bedrooms: 2, bathrooms: 1, available: false },
+  { id: 'unit-10-falcon-b', propertyId: 'prop-10-falcon-circle', label: 'B', bedrooms: 2, bathrooms: 1, available: false },
 ];
