@@ -8,7 +8,7 @@ export const site = {
   jobTitle: 'Property management',
   email: process.env.SITE_CONTACT_EMAIL || 'info@westcherokee.com',
   phone: process.env.SITE_CONTACT_PHONE || '678-885-7368',
-  phoneVanity: '678-885-RENT',
+  phoneLabel: '678-885-RENT (7368)',
   phoneTel: '+16788857368',
 };
 
