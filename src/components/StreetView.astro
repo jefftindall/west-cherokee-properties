@@ -6,11 +6,14 @@ interface Props {
   address: string;
   lat?: number;
   lng?: number;
+  heading?: number;
+  tilt?: number;
+  panoId?: string;
   compact?: boolean;
 }
 
-const { title, address, lat, lng, compact = false } = Astro.props;
-const src = streetViewEmbedUrl(address, lat, lng);
+const { title, address, lat, lng, heading, tilt, panoId, compact = false } = Astro.props;
+const src = streetViewEmbedUrl(address, { lat, lng, heading, tilt, panoId });
 ---
 
 <figure class:list={['overflow-hidden rounded-xl border border-line bg-panel', compact ? 'aspect-[16/10]' : 'aspect-[16/9]']}>

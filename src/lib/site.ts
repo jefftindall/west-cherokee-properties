@@ -14,6 +14,7 @@ export const site = {
 
 export const nav = [
   { href: '/properties', label: 'Properties' },
+  { href: '/neighborhoods', label: 'Neighborhoods' },
   { href: '/about', label: 'About' },
   { href: '/apply', label: 'Apply' },
   { href: '/contact', label: 'Contact' },

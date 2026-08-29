@@ -10,7 +10,7 @@ import {
 test.describe('public smoke', () => {
   test('home shows brand and communities', async ({ page }) => {
     await waitForOk(page, '/');
-    await expect(page.getByRole('heading', { name: /Homes near the square/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Your next home' })).toBeVisible();
     await expect(page.getByRole('link', { name: /See our homes/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /124 W Cherokee/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /11 Noble/i })).toBeVisible();
@@ -29,6 +29,14 @@ test.describe('public smoke', () => {
     await expect(page.getByRole('heading', { name: /Nothing for rent/i })).toBeVisible();
     await waitForOk(page, '/contact');
     await expect(page.getByRole('heading', { name: 'Contact' })).toBeVisible();
+    await waitForOk(page, '/neighborhoods');
+    await expect(page.getByRole('heading', { name: 'Two parts of town' })).toBeVisible();
+    await waitForOk(page, '/neighborhoods/historic-downtown');
+    await expect(page.getByRole('heading', { name: 'Historic Downtown' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Downtown Cartersville events calendar/i })).toBeVisible();
+    await waitForOk(page, '/neighborhoods/north-cartersville');
+    await expect(page.getByRole('heading', { name: 'North Cartersville' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Bartow County College and Career Academy/i })).toBeVisible();
   });
 
   test('robots and sitemap', async ({ request }) => {

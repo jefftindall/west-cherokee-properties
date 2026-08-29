@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { neighborhoodPath } from '../../lib/neighborhoods';
+
+const neighborhoods = (await getCollection('neighborhoods')).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout
+  title="Neighborhoods"
+  description="Two parts of Cartersville: a walkable historic downtown, and a quieter north-side street by the College and Career Academy."
+>
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h1 class="font-display text-5xl text-pine">Two parts of town</h1>
+    <p class="mt-4 max-w-2xl text-muted">
+      We have homes in historic downtown and on Falcon Circle in North Cartersville. Both are a short drive from I-75. Pick a neighborhood to see what is nearby.
+    </p>
+    <ul class="mt-10 grid gap-6 md:grid-cols-2">
+      {
+        neighborhoods.map((neighborhood) => (
+          <li class="rounded-xl border border-line bg-panel p-8">
+            <h2 class="font-display text-3xl text-pine">
+              <a class="text-pine no-underline hover:underline" href={neighborhoodPath(neighborhood.id)}>
+                {neighborhood.data.title}
+              </a>
+            </h2>
+            <p class="mt-3 text-muted">{neighborhood.data.teaser}</p>
+            <a class="btn-ghost mt-6" href={neighborhoodPath(neighborhood.id)}>
+              Things to do nearby
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</BaseLayout>

@@ -1,0 +1,131 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PropertyCard from '../../components/PropertyCard.astro';
+import { getCollection, render } from 'astro:content';
+import { groupPlacesByCategory, neighborhoodPath } from '../../lib/neighborhoods';
+
+export async function getStaticPaths() {
+  const neighborhoods = await getCollection('neighborhoods');
+  return neighborhoods.map((neighborhood) => ({
+    params: { slug: neighborhood.id },
+    props: { neighborhood },
+  }));
+}
+
+const { neighborhood } = Astro.props;
+const { Content } = await render(neighborhood);
+const properties = (await getCollection('properties'))
+  .filter((property) => property.data.neighborhoodSlug === neighborhood.id)
+  .sort((a, b) => a.data.order - b.data.order);
+const otherNeighborhoods = (await getCollection('neighborhoods'))
+  .filter((entry) => entry.id !== neighborhood.id)
+  .sort((a, b) => a.data.order - b.data.order);
+const placeGroups = groupPlacesByCategory(neighborhood.data.places);
+---
+
+<BaseLayout
+  title={neighborhood.data.title}
+  description={neighborhood.data.description}
+  canonicalPath={neighborhoodPath(neighborhood.id)}
+>
+  <article class="mx-auto max-w-3xl px-4 py-16">
+    <p class="text-sm font-semibold uppercase tracking-[0.25em] text-clay">Cartersville, Georgia</p>
+    <h1 class="font-display mt-3 text-5xl text-pine">{neighborhood.data.title}</h1>
+    <div class="prose-site mt-8 space-y-4 text-lg text-ink">
+      <Content />
+    </div>
+
+    {
+      neighborhood.data.calendar && (
+        <p class="mt-8 rounded-xl border border-line bg-panel p-5 text-ink">
+          See what is on this week — festivals, live music, and holiday nights — on the{' '}
+          <a
+            class="text-grove underline-offset-2 hover:underline"
+            href={neighborhood.data.calendar.href}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {neighborhood.data.calendar.label}
+          </a>
+          .
+        </p>
+      )
+    }
+  </article>
+
+  {
+    placeGroups.length > 0 && (
+      <section class="mx-auto max-w-6xl px-4 pb-8" aria-labelledby="nearby-heading">
+        <h2 id="nearby-heading" class="font-display text-3xl text-pine">
+          Nearby
+        </h2>
+        <div class="mt-8 grid gap-8 md:grid-cols-2">
+          {
+            placeGroups.map((group) => (
+              <div>
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-grove">{group.category}</h3>
+                <ul class="mt-3 space-y-4">
+                  {group.items.map((place) => (
+                    <li class="rounded-xl border border-line bg-panel p-5">
+                      <p class="font-semibold text-ink">
+                        {place.href ? (
+                          <a
+                            class="text-grove underline-offset-2 hover:underline"
+                            href={place.href}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {place.name}
+                          </a>
+                        ) : (
+                          place.name
+                        )}
+                      </p>
+                      <p class="mt-2 text-sm text-muted">{place.note}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+      </section>
+    )
+  }
+
+  {
+    properties.length > 0 && (
+      <section class="mx-auto max-w-6xl px-4 py-12" aria-labelledby="homes-heading">
+        <h2 id="homes-heading" class="font-display text-3xl text-pine">
+          Our homes here
+        </h2>
+        <ul class="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {properties.map((property) => (
+            <li>
+              <PropertyCard property={property} />
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  {
+    otherNeighborhoods.length > 0 && (
+      <nav class="mx-auto max-w-6xl px-4 pb-16 text-sm" aria-label="Other neighborhoods">
+        <p class="text-muted">
+          Also see{' '}
+          {otherNeighborhoods.map((entry, index) => (
+            <>
+              {index > 0 && ' and '}
+              <a class="text-grove underline-offset-2 hover:underline" href={neighborhoodPath(entry.id)}>
+                {entry.data.title}
+              </a>
+            </>
+          ))}
+          .
+        </p>
+      </nav>
+    )
+  }
+</BaseLayout>

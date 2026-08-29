@@ -4,12 +4,16 @@ city: Cartersville
 state: GA
 address: 124 W Cherokee Ave, Cartersville, GA 30120
 neighborhood: Historic downtown
+neighborhoodSlug: historic-downtown
 summary: A two-unit house on West Cherokee Avenue, a short walk from the shops and restaurants around the square.
 highlights:
   - Walk to downtown Cartersville
   - Two residences in one house — 2-bed and 3-bed
-lat: 34.16533
-lng: -84.79873
+lat: 34.1652969
+lng: -84.7988159
+heading: 184.21
+tilt: 95.48
+panoId: uq-W_xpjghea8JHKbklBDA
 zillowUrl: https://www.zillow.com/homes/124-W-Cherokee-Ave-Cartersville-GA-30120_rb/
 order: 1
 units:
@@ -23,6 +27,6 @@ units:
     available: false
 ---
 
-This is the house that gave the company its name. It sits on West Cherokee Avenue in historic downtown Cartersville — close enough to walk to coffee, supper, and the courthouse square.
+This is the house that gave the company its name. It sits on West Cherokee Avenue in historic downtown Cartersville — close enough to walk to coffee, supper, and the courthouse square. See [things to do in historic downtown](/neighborhoods/historic-downtown), including the downtown events calendar.
 
 Unit A is the 2-bed, 1-bath. Unit B is the 3-bed, 2-bath. Both are currently leased. 11 Noble Street is the cottage next door if you are comparing the two downtown addresses.
