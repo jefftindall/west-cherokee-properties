@@ -36,7 +36,7 @@ terraform plan -input=false -out=tfplan
 terraform apply tfplan
 ```
 
-Replace `REPLACE_ME` secrets in `kv-wcp-shared`: `SITE-CONTACT-EMAIL` (`info@westcherokee.com`), `SITE-CONTACT-PHONE` (`678-885-7368`), Turnstile, ACS, `ALLOWED-USER-IDS`, Stripe test/live keys, External ID client id/secret, `ALERT-EMAIL`.
+Replace `REPLACE_ME` secrets in `kv-wcp-shared` with the `az keyvault secret set` commands in [rotate-secrets.md](runbooks/rotate-secrets.md) (public contact and Turnstile site key are filled in there; never print other values).
 
 ## 2. Apply staging, then prod
 
