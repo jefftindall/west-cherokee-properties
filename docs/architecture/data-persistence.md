@@ -1,10 +1,12 @@
 # Data persistence
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-28  
+**Last updated:** 2026-08-29  
 **Scope:** Where durable data lives, record shapes, and access paths.
 
 There is **one application database**: Azure SQL (`wcp`). Git holds public brand copy only. Stripe is the money system of record.
+
+Staging currently has `create_sql = false` because this subscription cannot provision Azure SQL in East US 2 or East US (`ProvisioningDisabled`). `SQL-CONNECTION-STRING` in `kv-wcp-staging` is empty; the Functions API falls back to the in-memory store. Re-enable with `create_sql = true` (and a region Azure allows) when the quota exception lands. Prod still defaults to creating SQL.
 
 ## Systems of record
 
@@ -51,7 +53,7 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 | `service_requests` | Scoped to `person_id` |
 | `office_users` | Workforce identities + roles JSON |
 
-Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemoryStore`) so tests and `func start` work offline.
+Local/dev and staging (while `create_sql` is false) without `SQL_CONNECTION_STRING` use the in-memory store (`createMemoryStore`) so tests, `func start`, and the public site work offline. In-memory data is not durable across Function restarts.
 
 ## Access paths
 

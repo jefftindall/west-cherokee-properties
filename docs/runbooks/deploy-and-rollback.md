@@ -20,7 +20,7 @@ gh run list --repo jefftindall/west-cherokee-properties --workflow=cd-main.yml -
 gh run watch --repo jefftindall/west-cherokee-properties
 ```
 
-CD no-ops SWA deploy when `AZURE_CLIENT_ID` is empty (env stacks not applied / Actions vars not written yet).
+Job-level `if:` cannot see GitHub Environment variables. CD deploys staging when the **repo** var `STAGING_HOSTNAME` is set (written by the staging Terraform stack from the SWA default host). Prod stays skipped until `PROD_HOSTNAME` is set the same way. `AZURE_CLIENT_ID` lives on the `staging` / `prod` environments and is only used inside those jobs after they start.
 
 ## Local Terraform (not in CD until OIDC env identities exist)
 

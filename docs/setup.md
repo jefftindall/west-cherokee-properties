@@ -20,7 +20,7 @@ Provision Azure with Terraform (bootstrap + staging/prod), connect GitHub, store
 | Path | Purpose |
 |------|---------|
 | `infra/bootstrap` | Remote state + shared KV + Terraform OIDC (local state, East US 2) |
-| `infra/environments/staging` | Staging SWA + SQL + env KV |
+| `infra/environments/staging` | Staging SWA + env KV (`create_sql` is false until Azure SQL quota is available) |
 | `infra/environments/prod` | Production stack |
 | `infra/modules/site` | Shared module |
 

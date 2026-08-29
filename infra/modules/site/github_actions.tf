@@ -51,3 +51,26 @@ resource "github_actions_environment_variable" "appinsights_connection_string" {
   variable_name = "APPINSIGHTS_CONNECTION_STRING"
   value         = azurerm_application_insights.main.connection_string
 }
+
+# Job-level `if:` cannot see environment variables. Repo vars gate CD deploy jobs.
+resource "github_actions_variable" "staging_hostname" {
+  count         = var.manage_github_actions && var.environment == "staging" ? 1 : 0
+  repository    = var.github_repo
+  variable_name = "STAGING_HOSTNAME"
+  value         = azurerm_static_web_app.main.default_host_name
+}
+
+resource "github_actions_variable" "prod_hostname" {
+  count         = var.manage_github_actions && var.environment == "prod" ? 1 : 0
+  repository    = var.github_repo
+  variable_name = "PROD_HOSTNAME"
+  value         = azurerm_static_web_app.main.default_host_name
+}
+
+resource "github_actions_environment_secret" "swa_deploy_token" {
+  count           = var.manage_github_actions ? 1 : 0
+  environment     = github_repository_environment.this[0].environment
+  repository      = var.github_repo
+  secret_name     = "AZURE_STATIC_WEB_APPS_API_TOKEN"
+  plaintext_value = azurerm_static_web_app.main.api_key
+}
