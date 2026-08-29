@@ -1,0 +1,84 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Leases" description="Active and past leases" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Leases</h1>
+    <p class="mt-2 text-muted">One active lease per unit. Approve an application to create a lease, or add one here for a vacant unit.</p>
+    <form id="lease-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <div>
+        <label for="unitId">Unit ID</label>
+        <input id="unitId" name="unitId" required />
+      </div>
+      <div>
+        <label for="personEmail">Renter email</label>
+        <input id="personEmail" name="personEmail" type="email" required />
+      </div>
+      <div>
+        <label for="startDate">Start</label>
+        <input id="startDate" name="startDate" type="date" required />
+      </div>
+      <div>
+        <label for="endDate">End</label>
+        <input id="endDate" name="endDate" type="date" required />
+      </div>
+      <div>
+        <label for="rentCents">Monthly rent (cents)</label>
+        <input id="rentCents" name="rentCents" type="number" min="1" required />
+      </div>
+      <div class="flex items-end">
+        <button class="btn-primary" type="submit">Create lease</button>
+      </div>
+    </form>
+    <p id="lease-status" class="mt-2 text-sm text-muted" role="status"></p>
+    <div id="list" class="mt-6 text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    const status = document.getElementById('lease-status');
+    async function load() {
+      const res = await fetch('/api/office/leases');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load leases.';
+        return;
+      }
+      const rows = json.leases || [];
+      root.innerHTML = rows.length
+        ? `<ul class="space-y-2">${rows
+            .map(
+              (l: { id: string; unitId: string; status: string; rentCents: number }) =>
+                `<li>${l.id} · unit ${l.unitId} · ${l.status} · $${(l.rentCents / 100).toFixed(2)}</li>`,
+            )
+            .join('')}</ul>`
+        : 'No leases yet.';
+    }
+    document.getElementById('lease-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target as HTMLFormElement;
+      const data = new FormData(form);
+      if (status) status.textContent = 'Saving…';
+      const res = await fetch('/api/office/leases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unitId: data.get('unitId'),
+          personEmail: data.get('personEmail'),
+          startDate: data.get('startDate'),
+          endDate: data.get('endDate'),
+          rentCents: Number(data.get('rentCents')),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) status.textContent = res.ok ? 'Lease created.' : json.error || 'Could not create lease.';
+      load();
+    });
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
+  </script>
+</BaseLayout>

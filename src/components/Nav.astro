@@ -1,0 +1,29 @@
+---
+import { nav } from '../lib/site';
+import Logo from './Logo.astro';
+
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/';
+---
+
+<header class="border-b border-line bg-panel">
+  <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:py-4">
+    <span class="sm:hidden"><Logo mark size="sm" /></span>
+    <span class="hidden sm:inline-flex"><Logo /></span>
+    <nav aria-label="Primary" class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-grove">
+      {
+        nav.map((item) => (
+          <a
+            href={item.href}
+            class:list={[
+              'no-underline hover:underline',
+              path === item.href || path.startsWith(`${item.href}/`) ? 'text-clay' : null,
+            ]}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+      <a href="/portal" class="no-underline hover:underline">Residents</a>
+    </nav>
+  </div>
+</header>

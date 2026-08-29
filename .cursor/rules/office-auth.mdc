@@ -1,0 +1,18 @@
+---
+description: Authentication is not authorization for office and portal APIs
+globs: api/src/**/*.js,src/pages/office/**,src/pages/portal/**
+alwaysApply: false
+---
+
+# Office / portal auth
+
+Authentication and authorization are separate.
+
+- Staff: Microsoft Entra workforce + SWA Easy Auth (`aad`). Renters are never B2B guests in this tenant.
+- Renters: Microsoft Entra External ID (separate customer tenant) + Google/Apple/Microsoft/email. SWA provider id `externalid`.
+- Sign-in is not permission to act. Office APIs re-check `permissionGate()` against the catalog. Portal APIs scope every query to the signed-in person's email.
+- Keep workforce enterprise-app **Assignment required** off so login is not blocked with `AADSTS50105`.
+- Public exceptions (contact, apply, Stripe webhook) use Turnstile / Stripe signatures — not office login.
+- Local Functions (`AZURE_FUNCTIONS_ENVIRONMENT=Development`) grant the full office catalog so `func start` works without SWA headers.
+
+See `docs/architecture/authentication-authorization.md`.

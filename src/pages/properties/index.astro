@@ -1,0 +1,37 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { formatFloorPlan } from '../../lib/units';
+
+const properties = (await getCollection('properties')).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout title="Properties" description="Rental homes in Cartersville managed by West Cherokee Properties.">
+  <section class="mx-auto max-w-6xl px-4 py-16">
+    <h1 class="font-display text-5xl text-pine">Properties</h1>
+    <p class="mt-4 max-w-2xl text-muted">
+      We currently manage three addresses in Cartersville. Use one application for any unit — we do not run a different process by property. 11 Noble St uses the same policies as 124 W Cherokee Ave.
+    </p>
+    <ul class="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {
+        properties.map((property) => (
+          <li class="rounded-xl border border-line bg-panel p-6">
+            <a href={`/properties/${property.id}`} class="no-underline">
+              <p class="text-sm uppercase tracking-wide text-grove">
+                {property.data.city}, {property.data.state}
+              </p>
+              <h2 class="font-display mt-1 text-3xl text-pine">{property.data.title}</h2>
+              <p class="mt-3 text-muted">{property.data.summary}</p>
+              <ul class="mt-3 space-y-1 text-sm font-semibold text-ink">
+                {property.data.units.map((unit) => (
+                  <li>{formatFloorPlan(unit)}</li>
+                ))}
+              </ul>
+              <p class="mt-3 text-sm text-muted">{property.data.address}</p>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</BaseLayout>

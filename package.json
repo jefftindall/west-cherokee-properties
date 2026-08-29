@@ -1,0 +1,41 @@
+{
+  "name": "west-cherokee-properties",
+  "type": "module",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check",
+    "lint": "node scripts/lint.mjs",
+    "lint:api": "node scripts/lint-api.mjs",
+    "lint:terraform": "node scripts/lint-terraform.mjs",
+    "lint:actions-secrets": "node scripts/check-actions-secret-safety.mjs",
+    "test:api-auth": "node --test api/src/lib/auth.test.js api/src/lib/permissions.test.js api/src/lib/officeAccess.test.js",
+    "test:api-store": "node --test api/src/lib/store.test.js api/src/lib/applications.test.js api/src/lib/leases.test.js api/src/lib/invoices.test.js api/src/lib/serviceRequests.test.js",
+    "test:api-stripe": "node --test api/src/lib/stripeWebhook.test.js",
+    "test:api-contact": "node --test api/src/lib/httpErrors.test.js",
+    "test:staging-noindex": "node --test scripts/apply-staging-noindex.test.mjs",
+    "test:smoke": "playwright test --config=playwright.smoke.config.ts",
+    "test:journey": "playwright test --config=playwright.journey.config.ts"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/source-sans-3": "^5.2.9",
+    "@fontsource-variable/source-serif-4": "^5.2.9",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.1.3",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@playwright/test": "^1.54.2",
+    "playwright": "^1.54.2",
+    "typescript": "^5.9.2",
+    "zod": "^4.4.3"
+  }
+}

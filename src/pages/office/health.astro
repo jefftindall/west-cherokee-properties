@@ -1,0 +1,12 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Office health" description="Read-only office canary" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Health</h1>
+    <p id="office-health-ok" class="mt-4 text-muted">office-health-ok</p>
+  </section>
+</BaseLayout>

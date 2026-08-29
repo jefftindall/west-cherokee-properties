@@ -1,0 +1,18 @@
+---
+description: Keep docs/plans Action IDs, checklists, and statuses current when shipping planned phases
+globs: docs/plans/**
+alwaysApply: true
+---
+
+# Plan backlog status (docs/plans)
+
+When implementing/opening/updating a PR for work tracked in `docs/plans/`, update matching plan file(s) in that same PR.
+
+## What to update
+
+1. Action ID status (`planned` · `in_progress` · `blocked` · `done` · `wont_fix`)
+2. Acceptance-criteria checklists (`- [ ]` / `- [x]`)
+3. Dependency graphs / phase summaries
+4. Last updated + revision notes
+
+Never mark `done` for chat-only design. No private emails/phones/secrets in plan files.

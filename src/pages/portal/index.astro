@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PortalNav from '../../components/PortalNav.astro';
+---
+
+<BaseLayout title="Resident portal" description="Your lease, rent, and requests" noIndex hideNav hideFooter>
+  <PortalNav />
+  <section class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Resident portal</h1>
+    <p id="portal-status" class="mt-4 text-muted">Loading your household…</p>
+    <div class="mt-8 grid gap-4">
+      <a class="rounded-lg border border-line bg-panel p-5 no-underline" href="/portal/lease">Lease</a>
+      <a class="rounded-lg border border-line bg-panel p-5 no-underline" href="/portal/invoices">Invoices and receipts</a>
+      <a class="rounded-lg border border-line bg-panel p-5 no-underline" href="/portal/requests">Service requests</a>
+    </div>
+  </section>
+  <script>
+    const el = document.getElementById('portal-status');
+    fetch('/api/portal/me')
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (!el) return;
+        if (res.ok && json.person) {
+          el.textContent = `Signed in as ${json.person.email}.`;
+        } else if (res.ok) {
+          el.innerHTML =
+            'No lease is on file for this sign-in yet. <a href="/apply">Start an application</a> if you are looking for a home.';
+        } else {
+          el.textContent = json.error || 'Could not load portal.';
+        }
+      })
+      .catch(() => {
+        if (el) el.textContent = 'Portal API is not reachable locally unless Functions are running.';
+      });
+  </script>
+</BaseLayout>

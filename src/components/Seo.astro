@@ -1,0 +1,40 @@
+---
+import { site } from '../lib/site';
+
+interface Props {
+  title: string;
+  description: string;
+  canonicalPath: string;
+  noIndex?: boolean;
+}
+
+const { title, description, canonicalPath, noIndex = false } = Astro.props;
+const normalizedPath =
+  canonicalPath.length > 1 && canonicalPath.endsWith('/')
+    ? canonicalPath.slice(0, -1)
+    : canonicalPath;
+const canonical = new URL(normalizedPath, site.url).href;
+const logoUrl = new URL(site.logoPath, site.url).href;
+
+const orgJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: site.name,
+  url: site.url,
+  description: site.description,
+  logo: logoUrl,
+};
+---
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+{noIndex ? <meta name="robots" content="noindex, nofollow" /> : null}
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content={site.name} />
+<meta property="og:image" content={logoUrl} />
+<meta name="twitter:card" content="summary" />
+<script is:inline type="application/ld+json" set:html={JSON.stringify(orgJsonLd)} />

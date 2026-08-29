@@ -1,0 +1,185 @@
+name: "CI: static analysis"
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+jobs:
+  terraform_lint:
+    name: Terraform lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+
+      - name: Cache TFLint plugins
+        uses: actions/cache@v6
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-${{ hashFiles('infra/.tflint.hcl') }}
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive infra
+
+      - name: TFLint init
+        working-directory: infra
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: tflint --init
+
+      - name: TFLint
+        working-directory: infra
+        run: tflint --recursive --format compact
+
+      - name: Terraform validate
+        run: |
+          set -euo pipefail
+          for dir in infra/bootstrap infra/environments/staging infra/environments/prod; do
+            echo "::group::validate ${dir}"
+            (
+              cd "$dir"
+              terraform init -backend=false -input=false
+              terraform validate
+            )
+            echo "::endgroup::"
+          done
+
+  site:
+    name: Site check
+    runs-on: ubuntu-latest
+    env:
+      SITE_CONTACT_EMAIL: check@example.com
+      SITE_CONTACT_PHONE: "000-000-0000"
+      PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and check
+        run: |
+          npm ci
+          npm run check
+
+  api:
+    name: API syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Syntax check
+        run: npm run lint:api
+
+  actions_secrets:
+    name: Actions secret-safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Check workflows for secret-leak anti-patterns
+        run: npm run lint:actions-secrets
+
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install API deps and test
+        run: |
+          npm ci
+          npm ci --prefix api
+          npm run test:api-auth
+          npm run test:api-store
+          npm run test:api-stripe
+          npm run test:api-contact
+          npm run test:staging-noindex
+
+  changes:
+    name: Path filter
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+
+  plan:
+    name: Plan ${{ matrix.environment }}
+    needs: [terraform_lint, changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.infra == 'true' && vars.AZURE_TF_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, prod]
+    environment: ${{ matrix.environment }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_TF_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TF_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform plan
+        working-directory: infra/environments/${{ matrix.environment }}
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TF_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tfplan

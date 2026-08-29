@@ -1,0 +1,18 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    "SITE_URL": "http://localhost:4321",
+    "TURNSTILE_SECRET": "1x0000000000000000000000000000000AA",
+    "CONTACT_NOTIFY_EMAIL": "ops@example.com",
+    "ACS_CONNECTION_STRING": "REPLACE_ME",
+    "ACS_EMAIL_SENDER": "REPLACE_ME",
+    "SQL_CONNECTION_STRING": "",
+    "ALLOWED_USER_IDS": "dev-user",
+    "STRIPE_SECRET_KEY": "sk_test_not_configured",
+    "STRIPE_WEBHOOK_SECRET": "whsec_test_secret",
+    "RENT_PAYMENTS_ENABLED": "false"
+  }
+}

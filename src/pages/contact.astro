@@ -1,0 +1,66 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../lib/site';
+
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
+---
+
+<BaseLayout title="Contact" description="Contact West Cherokee Properties about a property, application, or resident question.">
+  <section class="mx-auto max-w-xl px-4 py-16">
+    <h1 class="font-display text-5xl text-pine">Contact</h1>
+    <p class="mt-4 text-muted">
+      Send a message and we will reply by email. You can also write {site.email}.
+    </p>
+    <form id="contact-form" class="mt-8 space-y-4" method="post" action="/api/contactInquiry">
+      <div>
+        <label for="name">Name</label>
+        <input id="name" name="name" required maxlength="200" autocomplete="name" />
+      </div>
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required maxlength="320" autocomplete="email" />
+      </div>
+      <div>
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="6" required maxlength="5000"></textarea>
+      </div>
+      <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+      <button class="btn-primary" type="submit">Send message</button>
+      <p id="contact-status" class="text-sm text-muted" role="status"></p>
+    </form>
+  </section>
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script>
+    const form = document.getElementById('contact-form') as HTMLFormElement | null;
+    const status = document.getElementById('contact-status');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!status) return;
+      status.textContent = 'Sending…';
+      const data = new FormData(form);
+      const tokenInput = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
+      const payload = {
+        name: String(data.get('name') || ''),
+        email: String(data.get('email') || ''),
+        message: String(data.get('message') || ''),
+        turnstileToken: tokenInput?.value || '',
+      };
+      try {
+        const res = await fetch('/api/contactInquiry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          status.textContent = json.error || 'Could not send. Try again.';
+          return;
+        }
+        status.textContent = 'Thanks — we received your message.';
+        form.reset();
+      } catch {
+        status.textContent = 'Could not send. Try again.';
+      }
+    });
+  </script>
+</BaseLayout>

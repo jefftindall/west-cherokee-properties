@@ -1,0 +1,66 @@
+---
+import '../styles/global.css';
+import Seo from '../components/Seo.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { site } from '../lib/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  noIndex?: boolean;
+  hideNav?: boolean;
+  hideFooter?: boolean;
+}
+
+const {
+  title,
+  description = site.description,
+  canonicalPath,
+  noIndex = false,
+  hideNav = false,
+  hideFooter = false,
+} = Astro.props;
+
+function barePageTitle(raw: string): string {
+  const dot = ` · ${site.name}`;
+  let cleaned = raw.trim();
+  if (cleaned.endsWith(dot)) cleaned = cleaned.slice(0, -dot.length).trimEnd();
+  return cleaned;
+}
+
+const pageTitle = title
+  ? `${barePageTitle(title)} · ${site.name}`
+  : `${site.name} · ${site.tagline}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <Seo
+      title={pageTitle}
+      description={description}
+      canonicalPath={canonicalPath ?? Astro.url.pathname}
+      noIndex={noIndex}
+    />
+  </head>
+  <body class="site-bg antialiased">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded focus:bg-clay focus:px-3 focus:py-2 focus:text-white"
+    >
+      Skip to content
+    </a>
+    {hideNav ? null : <Nav />}
+    <main id="main">
+      <slot />
+    </main>
+    {hideFooter ? null : <Footer />}
+  </body>
+</html>

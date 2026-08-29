@@ -1,0 +1,16 @@
+---
+description: Bootstrap may feed environments; environments must never feed bootstrap
+alwaysApply: true
+---
+
+# Terraform stack direction
+
+Only bootstrap → environments. Bootstrap creates shared resources (`kv-wcp-shared`, OIDC, budget, Stripe API keys). Staging/prod consume them by well-known name (`data.azurerm_key_vault.shared`).
+
+Never environments → bootstrap. Do not add to `infra/bootstrap/`:
+
+- `terraform_remote_state` of staging/prod
+- data sources on env Key Vaults or other env-stack resources
+- variables/outputs filled from env Terraform
+
+Existing exception: bootstrap looks up Entra apps `wcp-gha-staging` / `wcp-gha-prod` by display name for shared-KV RBAC (directory lookup, not env state). Do not extend to Key Vaults or remote state.

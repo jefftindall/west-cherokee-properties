@@ -1,0 +1,98 @@
+{
+  "routes": [
+    {
+      "route": "/_astro/*",
+      "headers": { "Cache-Control": "public, max-age=31536000, immutable" }
+    },
+    {
+      "route": "/images/*",
+      "headers": { "Cache-Control": "public, max-age=604800" }
+    },
+    {
+      "route": "/api/contactInquiry",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/api/apply",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/api/stripeWebhook",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/office",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/office/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/portal",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/portal/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/api/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/*",
+      "headers": { "Cache-Control": "public, must-revalidate, max-age=30" }
+    }
+  ],
+  "responseOverrides": {
+    "401": {
+      "statusCode": 302,
+      "redirect": "/login"
+    }
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  "auth": {
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/common/v2.0",
+          "clientIdSettingName": "AAD_CLIENT_ID",
+          "clientSecretSettingName": "AAD_CLIENT_SECRET"
+        }
+      },
+      "customOpenIdConnectProviders": {
+        "externalid": {
+          "registration": {
+            "clientIdSettingName": "EXTERNAL_ID_CLIENT_ID",
+            "clientCredential": {
+              "clientSecretSettingName": "EXTERNAL_ID_CLIENT_SECRET"
+            },
+            "openIdConnectConfiguration": {
+              "wellKnownOpenIdConfiguration": "https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration"
+            }
+          },
+          "login": {
+            "nameClaimType": "emails",
+            "scopes": ["openid", "profile", "email"],
+            "loginParameterNames": []
+          }
+        }
+      }
+    }
+  },
+  "platform": {
+    "apiRuntime": "node:20"
+  }
+}

@@ -1,0 +1,62 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Invoices" description="Rent invoices" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Invoices</h1>
+    <form id="inv-form" class="mt-6 flex flex-wrap gap-3">
+      <input name="leaseId" placeholder="Lease ID" required />
+      <input name="periodStart" type="date" required />
+      <input name="periodEnd" type="date" required />
+      <button class="btn-primary" type="submit">Generate this period</button>
+    </form>
+    <p id="inv-status" class="mt-2 text-sm text-muted" role="status"></p>
+    <div id="list" class="mt-6 text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    const status = document.getElementById('inv-status');
+    async function load() {
+      const res = await fetch('/api/office/invoices');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load invoices.';
+        return;
+      }
+      const rows = json.invoices || [];
+      root.innerHTML = rows.length
+        ? `<ul class="space-y-2">${rows
+            .map(
+              (i: { id: string; status: string; amountCents: number; periodStart: string }) =>
+                `<li>${i.id} · ${i.periodStart} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}</li>`,
+            )
+            .join('')}</ul>`
+        : 'No invoices yet.';
+    }
+    document.getElementById('inv-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target as HTMLFormElement;
+      const data = new FormData(form);
+      if (status) status.textContent = 'Creating…';
+      const res = await fetch('/api/office/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leaseId: data.get('leaseId'),
+          periodStart: data.get('periodStart'),
+          periodEnd: data.get('periodEnd'),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) status.textContent = res.ok ? 'Invoice created.' : json.error || 'Could not create invoice.';
+      load();
+    });
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
+  </script>
+</BaseLayout>

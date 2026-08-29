@@ -1,0 +1,36 @@
+---
+import Logo from './Logo.astro';
+
+const path = Astro.url.pathname.replace(/\/+$/, '') || '/portal';
+const links = [
+  { href: '/portal', label: 'Home' },
+  { href: '/portal/lease', label: 'Lease' },
+  { href: '/portal/invoices', label: 'Invoices' },
+  { href: '/portal/requests', label: 'Requests' },
+];
+---
+
+<header class="border-b border-line bg-panel">
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-3">
+    <div class="flex items-center gap-3">
+      <Logo href="/portal" mark size="sm" />
+      <a href="/portal" class="text-lg font-semibold text-pine no-underline">Resident portal</a>
+    </div>
+    <nav class="flex flex-wrap gap-4 text-sm font-semibold text-grove">
+      {
+        links.map((link) => (
+          <a
+            href={link.href}
+            class:list={[
+              'no-underline hover:underline',
+              path === link.href ? 'text-clay' : null,
+            ]}
+          >
+            {link.label}
+          </a>
+        ))
+      }
+      <a class="no-underline hover:underline" href="/.auth/logout">Sign out</a>
+    </nav>
+  </div>
+</header>

@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Logo from '../components/Logo.astro';
+---
+
+<BaseLayout title="Sign in" description="Choose staff or resident sign-in." noIndex>
+  <section class="mx-auto max-w-lg px-4 py-20">
+    <div class="mb-8">
+      <Logo />
+    </div>
+    <h1 class="font-display text-4xl text-pine">Sign in</h1>
+    <p class="mt-4 text-muted">
+      Staff and residents use different directories. Renters are never added to the office Microsoft tenant.
+    </p>
+    <div class="mt-10 grid gap-4">
+      <a class="btn-secondary" href="/.auth/login/aad?post_login_redirect_uri=/office">Staff office</a>
+      <a class="btn-primary" href="/.auth/login/externalid?post_login_redirect_uri=/portal">Resident portal</a>
+    </div>
+  </section>
+</BaseLayout>

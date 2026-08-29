@@ -1,0 +1,14 @@
+---
+description: GitHub Actions workflow display names follow Scheme A
+globs: .github/workflows/**
+alwaysApply: true
+---
+
+# GitHub Actions naming (Scheme A)
+
+When adding or editing workflows under `.github/workflows/`:
+
+1. Follow Scheme A in `docs/runbooks/github-actions-naming.md`.
+2. Display name: must be `"<Area>: <purpose>"` with Area in {CI, CD, Ops, Maint}.
+3. New workflow filenames: `<area>-<purpose>[-cadence].yml` (`ci-`, `cd-`, `ops-`, `maint-`).
+4. Keep plan IDs out of workflow display name; put them in comments/docs.

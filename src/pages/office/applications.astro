@@ -1,0 +1,55 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Applications" description="Review rental applications" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Applications</h1>
+    <p class="mt-2 text-muted">Approve an application to create a renter and lease on a vacant unit.</p>
+    <div id="list" class="mt-6 overflow-x-auto text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    async function load() {
+      const res = await fetch('/api/office/applications');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load applications.';
+        return;
+      }
+      const rows = json.applications || [];
+      if (!rows.length) {
+        root.textContent = 'No applications yet.';
+        return;
+      }
+      root.innerHTML = `<table class="w-full border-collapse"><thead><tr><th class="border-b border-line py-2 text-left">Name</th><th class="border-b border-line py-2 text-left">Community</th><th class="border-b border-line py-2 text-left">Status</th><th class="border-b border-line py-2 text-left"></th></tr></thead><tbody>${rows
+        .map(
+          (row: { id: string; fullName: string; propertySlug: string; status: string }) =>
+            `<tr><td class="py-2">${row.fullName}</td><td>${row.propertySlug}</td><td>${row.status}</td><td>${
+              row.status === 'submitted' || row.status === 'in_review'
+                ? `<button data-id="${row.id}" data-action="approve" class="btn-primary px-2 py-1 text-xs">Approve</button> <button data-id="${row.id}" data-action="decline" class="btn-secondary px-2 py-1 text-xs">Decline</button>`
+                : ''
+            }</td></tr>`,
+        )
+        .join('')}</tbody></table>`;
+      root.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = (btn as HTMLButtonElement).dataset.id;
+          const action = (btn as HTMLButtonElement).dataset.action;
+          await fetch(`/api/office/applications/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: action === 'approve' ? 'approved' : 'declined' }),
+          });
+          load();
+        });
+      });
+    }
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
+  </script>
+</BaseLayout>

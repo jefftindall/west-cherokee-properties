@@ -1,0 +1,13 @@
+---
+description: Keep docs/architecture/data-persistence.md current when stores change
+globs: api/src/lib/**/*.js,api/src/db/**,infra/modules/site/*.tf,docs/architecture/data-persistence.md
+alwaysApply: false
+---
+
+# Data persistence documentation
+
+`docs/architecture/data-persistence.md` is the architecture SoT for stores, record shapes, relations, and access-flow diagrams.
+
+When a PR adds, removes, or changes a durable store, schema, relation, or how records are read/written (Azure SQL, git collections, Stripe catalog, Key Vault names the app reads), update that document **in the same PR** — bump **Last updated** and fix any stale mermaid.
+
+Do not invent a second application database. Azure SQL is the operational store; git is public brand only; Stripe is money. A new billable SKU must update `docs/runbooks/cost-and-quotas.md` and the subscription budget in the same PR.

@@ -1,0 +1,48 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Service requests" description="Maintenance queue" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Service requests</h1>
+    <div id="list" class="mt-6 text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    async function load() {
+      const res = await fetch('/api/office/service-requests');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load requests.';
+        return;
+      }
+      const rows = json.requests || [];
+      if (!rows.length) {
+        root.textContent = 'No open requests.';
+        return;
+      }
+      root.innerHTML = `<ul class="space-y-3">${rows
+        .map(
+          (r: { id: string; title: string; status: string }) =>
+            `<li class="rounded border border-line bg-panel p-3">${r.title} · ${r.status} <button data-id="${r.id}" class="btn-secondary ml-2 px-2 py-1 text-xs">Mark in progress</button></li>`,
+        )
+        .join('')}</ul>`;
+      root.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await fetch(`/api/office/service-requests/${(btn as HTMLButtonElement).dataset.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'in_progress' }),
+          });
+          load();
+        });
+      });
+    }
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
+  </script>
+</BaseLayout>

@@ -1,0 +1,18 @@
+---
+description: Upgrade GitHub Actions off Node.js 20; prevent secret leaks in workflow logs
+globs: .github/workflows/**
+alwaysApply: true
+---
+
+# GitHub Actions Node.js runtime + secret safety
+
+Before committing workflow changes:
+
+1. Scan every `uses:` entry for Node.js 20 runtimes.
+2. Upgrade to Node.js 24+ releases.
+3. Prefer `actions/checkout@v7`, `setup-node@v7`, `upload-artifact@v7`, `download-artifact@v8`.
+4. Run `npm run lint:actions-secrets` before commit.
+
+## Secrets in workflow logs (non-negotiable)
+
+Follow `never-echo-secrets.mdc`. Never pass PEMs via action `with:` inputs. Never echo `"::add-mask::$MULTILINE_VAR"` for PEMs. Rotate immediately if leaked.

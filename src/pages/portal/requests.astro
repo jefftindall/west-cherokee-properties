@@ -1,0 +1,59 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PortalNav from '../../components/PortalNav.astro';
+---
+
+<BaseLayout title="Service requests" description="Request a repair" noIndex hideNav hideFooter>
+  <PortalNav />
+  <section class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Service requests</h1>
+    <form id="req-form" class="mt-6 space-y-3">
+      <div>
+        <label for="title">Title</label>
+        <input id="title" name="title" required maxlength="200" />
+      </div>
+      <div>
+        <label for="details">Details</label>
+        <textarea id="details" name="details" rows="4" required maxlength="4000"></textarea>
+      </div>
+      <button class="btn-primary" type="submit">Submit request</button>
+    </form>
+    <p id="req-status" class="mt-2 text-sm text-muted" role="status"></p>
+    <div id="list" class="mt-6 text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    const status = document.getElementById('req-status');
+    async function load() {
+      const res = await fetch('/api/portal/service-requests');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load requests.';
+        return;
+      }
+      const rows = json.requests || [];
+      root.innerHTML = rows.length
+        ? `<ul class="space-y-2">${rows.map((r: { title: string; status: string }) => `<li>${r.title} · ${r.status}</li>`).join('')}</ul>`
+        : 'No requests yet.';
+    }
+    document.getElementById('req-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target as HTMLFormElement;
+      const data = new FormData(form);
+      if (status) status.textContent = 'Sending…';
+      const res = await fetch('/api/portal/service-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: data.get('title'), details: data.get('details') }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) status.textContent = res.ok ? 'Request submitted.' : json.error || 'Could not submit.';
+      if (res.ok) form.reset();
+      load();
+    });
+    load().catch(() => {
+      if (root) root.textContent = 'Portal API is not reachable.';
+    });
+  </script>
+</BaseLayout>

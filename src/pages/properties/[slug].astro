@@ -1,0 +1,47 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection, render } from 'astro:content';
+import { formatFloorPlan } from '../../lib/units';
+
+export async function getStaticPaths() {
+  const properties = await getCollection('properties');
+  return properties.map((property) => ({
+    params: { slug: property.id },
+    props: { property },
+  }));
+}
+
+const { property } = Astro.props;
+const { Content } = await render(property);
+---
+
+<BaseLayout
+  title={property.data.title}
+  description={property.data.summary}
+  canonicalPath={`/properties/${property.id}`}
+>
+  <article class="mx-auto max-w-3xl px-4 py-16">
+    <p class="text-sm uppercase tracking-wide text-grove">
+      {property.data.city}, {property.data.state}
+    </p>
+    <h1 class="font-display mt-2 text-5xl text-pine">{property.data.title}</h1>
+    <p class="mt-4 text-lg text-muted">{property.data.address}</p>
+    <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-grove">Units</h2>
+    <ul class="mt-3 space-y-1 text-lg text-ink">
+      {property.data.units.map((unit) => (
+        <li>{formatFloorPlan(unit)}</li>
+      ))}
+    </ul>
+    {
+      property.data.highlights.length > 0 && (
+        <ul class="mt-6 list-disc space-y-1 pl-5 text-ink">
+          {property.data.highlights.map((item) => <li>{item}</li>)}
+        </ul>
+      )
+    }
+    <div class="prose-site mt-8 text-ink">
+      <Content />
+    </div>
+    <a class="btn-primary mt-10" href={`/apply?property=${property.id}`}>Apply to rent here</a>
+  </article>
+</BaseLayout>

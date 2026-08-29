@@ -1,0 +1,107 @@
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource-variable/source-sans-3';
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif;
+  --font-sans: 'Source Sans 3 Variable', 'Source Sans 3', system-ui, sans-serif;
+
+  --color-ink: #1a2330;
+  --color-pine: #0d4a8c;
+  --color-grove: #0068d1;
+  --color-panel: #ffffff;
+  --color-cream: #f5f7fa;
+  --color-muted: #5c646e;
+  --color-clay: #e56e00;
+  --color-leaf: #1f9d24;
+  --color-line: #d7dce2;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-cream);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.site-bg {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(0, 104, 209, 0.06), transparent 50%),
+    var(--color-cream);
+}
+
+.prose-site {
+  max-width: 42rem;
+}
+
+.prose-site a {
+  color: var(--color-grove);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  background: var(--color-clay);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+}
+
+.btn-primary:hover {
+  background: #c45e00;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  background: var(--color-grove);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1.25rem;
+}
+
+.btn-secondary:hover {
+  background: #0057b0;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-grove);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  background: white;
+  padding: 0.65rem 0.75rem;
+  color: var(--color-ink);
+}
+
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}

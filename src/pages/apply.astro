@@ -1,0 +1,105 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const properties = (await getCollection('properties')).sort((a, b) => a.data.order - b.data.order);
+const requested = Astro.url.searchParams.get('property') || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA';
+---
+
+<BaseLayout
+  title="Apply"
+  description="Submit one rental application for any West Cherokee Properties home."
+>
+  <section class="mx-auto max-w-xl px-4 py-16">
+    <h1 class="font-display text-5xl text-pine">Rental application</h1>
+    <p class="mt-4 text-muted">
+      We use the same application for every household. We do not collect Social Security numbers or protected-class information on this form.
+    </p>
+    <form id="apply-form" class="mt-8 space-y-4">
+      <div>
+        <label for="propertySlug">Property</label>
+        <select id="propertySlug" name="propertySlug" required>
+          {
+            properties.map((property) => (
+              <option value={property.id} selected={property.id === requested}>
+                {property.data.title}
+              </option>
+            ))
+          }
+        </select>
+      </div>
+      <div>
+        <label for="fullName">Full legal name</label>
+        <input id="fullName" name="fullName" required maxlength="200" autocomplete="name" />
+      </div>
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required maxlength="320" autocomplete="email" />
+      </div>
+      <div>
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" required maxlength="40" autocomplete="tel" />
+      </div>
+      <div>
+        <label for="desiredMoveIn">Desired move-in date</label>
+        <input id="desiredMoveIn" name="desiredMoveIn" type="date" required />
+      </div>
+      <div>
+        <label for="householdSize">Household size</label>
+        <input id="householdSize" name="householdSize" type="number" min="1" max="12" value="1" required />
+      </div>
+      <div>
+        <label for="notes">Anything we should know (optional)</label>
+        <textarea id="notes" name="notes" rows="4" maxlength="4000"></textarea>
+      </div>
+      <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
+      <button class="btn-primary" type="submit">Submit application</button>
+      <p id="apply-status" class="text-sm text-muted" role="status"></p>
+    </form>
+  </section>
+  <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <script>
+    const form = document.getElementById('apply-form') as HTMLFormElement | null;
+    const status = document.getElementById('apply-status');
+    const select = document.getElementById('propertySlug') as HTMLSelectElement | null;
+    const requested = new URLSearchParams(location.search).get('property');
+    if (select && requested) {
+      const option = [...select.options].find((item) => item.value === requested);
+      if (option) select.value = requested;
+    }
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!status) return;
+      status.textContent = 'Submitting…';
+      const data = new FormData(form);
+      const tokenInput = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
+      const payload = {
+        propertySlug: String(data.get('propertySlug') || ''),
+        fullName: String(data.get('fullName') || ''),
+        email: String(data.get('email') || ''),
+        phone: String(data.get('phone') || ''),
+        desiredMoveIn: String(data.get('desiredMoveIn') || ''),
+        householdSize: Number(data.get('householdSize') || 1),
+        notes: String(data.get('notes') || ''),
+        turnstileToken: tokenInput?.value || '',
+      };
+      try {
+        const res = await fetch('/api/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          status.textContent = json.error || 'Could not submit. Try again.';
+          return;
+        }
+        status.textContent = 'Application received. We will email you next steps.';
+        form.reset();
+      } catch {
+        status.textContent = 'Could not submit. Try again.';
+      }
+    });
+  </script>
+</BaseLayout>

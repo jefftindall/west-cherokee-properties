@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Logo from '../components/Logo.astro';
+---
+
+<BaseLayout title="Style guide" description="West Cherokee Properties visual tokens." noIndex>
+  <section class="mx-auto max-w-3xl px-4 py-16">
+    <p class="text-sm font-semibold uppercase tracking-[0.25em] text-grove">Brand</p>
+    <h1 class="font-display mt-2 text-5xl text-pine">Style guide</h1>
+    <p class="mt-4 text-muted">
+      Transparent logo on a light page. Orange for actions, blue for links and headings, green only as a supporting accent.
+    </p>
+    <div class="mt-8 rounded-lg border border-line bg-panel p-6">
+      <Logo />
+    </div>
+    <div class="mt-10 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div class="rounded-lg bg-pine p-6 text-white">pine</div>
+      <div class="rounded-lg bg-grove p-6 text-white">grove</div>
+      <div class="rounded-lg bg-clay p-6 text-white">clay</div>
+      <div class="rounded-lg bg-leaf p-6 text-white">leaf</div>
+    </div>
+    <div class="mt-10 flex flex-wrap gap-3">
+      <span class="btn-primary">Primary</span>
+      <span class="btn-secondary">Secondary</span>
+      <span class="btn-ghost">Ghost</span>
+    </div>
+  </section>
+</BaseLayout>

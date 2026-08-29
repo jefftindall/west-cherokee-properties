@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PortalNav from '../../components/PortalNav.astro';
+---
+
+<BaseLayout title="Invoices" description="Pay rent and view receipts" noIndex hideNav hideFooter>
+  <PortalNav />
+  <section class="mx-auto max-w-3xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Invoices</h1>
+    <div id="list" class="mt-6 text-sm"></div>
+  </section>
+  <script>
+    const root = document.getElementById('list');
+    async function load() {
+      const res = await fetch('/api/portal/invoices');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load invoices.';
+        return;
+      }
+      const rows = json.invoices || [];
+      if (!rows.length) {
+        root.textContent = 'No invoices yet.';
+        return;
+      }
+      root.innerHTML = `<ul class="space-y-3">${rows
+        .map((i: { id: string; status: string; amountCents: number; hostedInvoiceUrl?: string; receiptUrl?: string }) => {
+          const pay =
+            i.status !== 'paid' && i.hostedInvoiceUrl
+              ? `<a class="btn-primary ml-2 px-2 py-1 text-xs" href="${i.hostedInvoiceUrl}">Pay</a>`
+              : '';
+          const receipt = i.receiptUrl
+            ? `<a class="btn-ghost ml-2" href="${i.receiptUrl}">Receipt</a>`
+            : '';
+          return `<li class="rounded border border-line bg-panel p-3">${i.id} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}${pay}${receipt}</li>`;
+        })
+        .join('')}</ul>`;
+    }
+    load().catch(() => {
+      if (root) root.textContent = 'Portal API is not reachable.';
+    });
+  </script>
+</BaseLayout>
