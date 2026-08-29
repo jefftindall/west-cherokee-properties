@@ -13,7 +13,7 @@ Provision Azure with Terraform (bootstrap + staging/prod), connect GitHub, store
 - A separate **Entra External ID** (CIAM) tenant for renters — never invite renters as B2B guests in the office tenant
 - Stripe account (test keys first)
 - Cloudflare Turnstile site + secret
-- `gh` CLI if Terraform should write Actions variables
+- `gh` CLI if Terraform should write Actions variables. CI plan needs a repo Actions secret `GH_TOKEN` with permission to read Actions variables and environment secrets — the workflow `GITHUB_TOKEN` cannot (`403 Resource not accessible by integration`). Same token you export locally: `gh secret set GH_TOKEN` (reads the token from stdin; do not print it).
 
 ## Layout
 
