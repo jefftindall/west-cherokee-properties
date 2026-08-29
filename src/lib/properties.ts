@@ -14,9 +14,19 @@ export function mapsEmbedUrl(address: string): string {
   return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=16&output=embed`;
 }
 
-export function streetViewEmbedUrl(address: string, lat?: number, lng?: number): string {
-  if (lat != null && lng != null) {
-    return `https://www.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=12,0,0,0,0&output=svembed`;
+/** `heading` is the Maps URL `…h` value. `tilt` is `…t` (90 is level). */
+export function streetViewEmbedUrl(
+  address: string,
+  camera?: { lat?: number; lng?: number; heading?: number; tilt?: number; panoId?: string },
+): string {
+  const heading = camera?.heading ?? 0;
+  const pitch = 90 - (camera?.tilt ?? 90);
+  const cbp = `12,${heading},0,0,${pitch}`;
+  if (camera?.panoId) {
+    return `https://www.google.com/maps?layer=c&panoid=${encodeURIComponent(camera.panoId)}&cbp=${cbp}&output=svembed`;
+  }
+  if (camera?.lat != null && camera?.lng != null) {
+    return `https://www.google.com/maps?layer=c&cbll=${camera.lat},${camera.lng}&cbp=${cbp}&output=svembed`;
   }
   return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&layer=c&z=17&output=svembed`;
 }

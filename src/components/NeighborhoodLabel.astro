@@ -1,0 +1,20 @@
+---
+import { neighborhoodPath } from '../lib/neighborhoods';
+
+interface Props {
+  label?: string;
+  slug?: string;
+}
+
+const { label, slug } = Astro.props;
+---
+
+{
+  label && slug ? (
+    <a class="text-grove no-underline hover:underline" href={neighborhoodPath(slug)}>
+      {label}
+    </a>
+  ) : (
+    <span>{label}</span>
+  )
+}

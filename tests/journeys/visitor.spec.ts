@@ -19,6 +19,19 @@ test.describe('visitor journey', () => {
     await expect(page.getByLabel('Name')).toBeVisible();
   });
 
+  test('visitor can open a neighborhood from home @content', async ({ page }) => {
+    await waitForOk(page, '/');
+    await page.getByRole('link', { name: /Things to do nearby/i }).first().click();
+    await expect(page).toHaveURL(/\/neighborhoods\/historic-downtown/);
+    await expect(page.getByRole('heading', { name: 'Historic Downtown' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Downtown Cartersville events calendar/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Noble & Main Coffee Co/i })).toBeVisible();
+    await page.getByRole('navigation', { name: 'Other neighborhoods' }).getByRole('link', { name: 'North Cartersville' }).click();
+    await expect(page).toHaveURL(/\/neighborhoods\/north-cartersville/);
+    await expect(page.getByRole('heading', { name: 'North Cartersville' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Savoy Automobile Museum/i })).toBeVisible();
+  });
+
   test('visitor can open contact @content @mobile', async ({ page }) => {
     await waitForOk(page, '/');
     await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Contact' }).click();

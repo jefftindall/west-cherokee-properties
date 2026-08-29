@@ -1,6 +1,7 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import StreetView from './StreetView.astro';
+import NeighborhoodLabel from './NeighborhoodLabel.astro';
 import { formatFloorPlan } from '../lib/units';
 import { propertyHasVacancy, unitIsAvailable } from '../lib/properties';
 
@@ -18,11 +19,17 @@ const vacant = propertyHasVacancy(property);
     address={property.data.address}
     lat={property.data.lat}
     lng={property.data.lng}
+    heading={property.data.heading}
+    tilt={property.data.tilt}
+    panoId={property.data.panoId}
     compact
   />
   <div class="p-6">
     <p class="text-sm uppercase tracking-wide text-grove">
-      {property.data.neighborhood || `${property.data.city}, ${property.data.state}`}
+      <NeighborhoodLabel
+        label={property.data.neighborhood || `${property.data.city}, ${property.data.state}`}
+        slug={property.data.neighborhoodSlug}
+      />
     </p>
     <h2 class="font-display mt-1 text-3xl text-pine">
       <a class="text-pine no-underline hover:underline" href={`/properties/${property.id}`}>{property.data.title}</a>
