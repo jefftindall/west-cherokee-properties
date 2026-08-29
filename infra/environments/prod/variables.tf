@@ -10,7 +10,7 @@ variable "location" {
 
 variable "custom_domain" {
   type    = string
-  default = "westcherokeeproperties.com"
+  default = "westcherokee.com"
 }
 
 variable "custom_hostnames" {

@@ -1,6 +1,6 @@
 # West Cherokee Properties
 
-Rental property management site for [westcherokeeproperties.com](https://westcherokeeproperties.com): public marketing, rental applications, and authenticated office (staff) plus resident portal. Azure Static Web Apps, Terraform, Key Vault, Azure SQL, and Stripe invoices.
+Rental property management site for [westcherokee.com](https://westcherokee.com): public marketing, rental applications, and authenticated office (staff) plus resident portal. Azure Static Web Apps, Terraform, Key Vault, Azure SQL, and Stripe invoices.
 
 ## Features
 

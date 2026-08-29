@@ -5,13 +5,13 @@ export const PROPAGATION_POLL_MS = 5_000;
 
 export function isStaticWebAppHost(): boolean {
   const base = process.env.BASE_URL ?? '';
-  return /\.azurestaticapps\.net/i.test(base) || /westcherokeeproperties\.com/i.test(base);
+  return /\.azurestaticapps\.net/i.test(base) || /westcherokee\.com/i.test(base);
 }
 
 export function expectsStagingNoIndex(): boolean {
   try {
     const host = new URL(process.env.BASE_URL || 'http://localhost').hostname.toLowerCase();
-    return host === 'test.westcherokeeproperties.com' || host.endsWith('.azurestaticapps.net');
+    return host === 'test.westcherokee.com' || host.endsWith('.azurestaticapps.net');
   } catch {
     return false;
   }

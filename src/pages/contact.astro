@@ -9,7 +9,10 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
   <section class="mx-auto max-w-xl px-4 py-16">
     <h1 class="font-display text-5xl text-pine">Contact</h1>
     <p class="mt-4 text-muted">
-      Send a message and we will reply by email. You can also write {site.email}.
+      Send a message and we will reply by email or phone. You can also write{' '}
+      <a class="text-grove underline-offset-2 hover:underline" href={`mailto:${site.email}`}>{site.email}</a>
+      {' '}or call{' '}
+      <a class="text-grove underline-offset-2 hover:underline" href={`tel:${site.phoneTel}`}>{site.phone} ({site.phoneVanity})</a>.
     </p>
     <form id="contact-form" class="mt-8 space-y-4" method="post" action="/api/contactInquiry">
       <div>

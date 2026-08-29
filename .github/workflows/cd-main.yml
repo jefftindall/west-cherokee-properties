@@ -19,8 +19,6 @@ jobs:
     name: Build release
     runs-on: ubuntu-latest
     env:
-      SITE_CONTACT_EMAIL: check@example.com
-      SITE_CONTACT_PHONE: "000-000-0000"
       PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
     steps:
       - uses: actions/checkout@v7

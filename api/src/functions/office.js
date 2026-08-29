@@ -166,7 +166,7 @@ app.http('officeInvoicesPost', {
         stripe,
         customerId: customer.id,
         appInvoice: invoice,
-        siteUrl: process.env.SITE_URL || 'https://westcherokeeproperties.com',
+        siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
       });
       invoice = await store.updateInvoice(invoice.id, stripeInv);
     }

@@ -36,7 +36,7 @@ terraform plan -input=false -out=tfplan
 terraform apply tfplan
 ```
 
-Replace `REPLACE_ME` secrets in `kv-wcp-shared`: `SITE-CONTACT-EMAIL`, Turnstile, ACS, `ALLOWED-USER-IDS`, Stripe test/live keys, External ID client id/secret, `ALERT-EMAIL`.
+Replace `REPLACE_ME` secrets in `kv-wcp-shared`: `SITE-CONTACT-EMAIL` (`info@westcherokee.com`), `SITE-CONTACT-PHONE` (`678-885-7368`), Turnstile, ACS, `ALLOWED-USER-IDS`, Stripe test/live keys, External ID client id/secret, `ALERT-EMAIL`.
 
 ## 2. Apply staging, then prod
 
@@ -55,4 +55,4 @@ Create a customer tenant. Register an app with redirect URIs `https://<swa>/.aut
 
 ## 4. Domain
 
-Point `test.westcherokeeproperties.com` at staging and `westcherokeeproperties.com` at prod. See [dns-and-domain.md](runbooks/dns-and-domain.md).
+Point `test.westcherokee.com` at staging and `westcherokee.com` at prod. See [dns-and-domain.md](runbooks/dns-and-domain.md).

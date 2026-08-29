@@ -5,4 +5,4 @@ Disallow: /portal
 Disallow: /login
 Disallow: /style-guide
 
-Sitemap: https://westcherokeeproperties.com/sitemap-index.xml
+Sitemap: https://westcherokee.com/sitemap-index.xml

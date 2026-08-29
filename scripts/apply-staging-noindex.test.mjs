@@ -29,7 +29,7 @@ test('applyStagingNoIndex writes Disallow: / and X-Robots-Tag without dropping o
   );
   fs.writeFileSync(
     path.join(dir, 'robots.txt'),
-    'User-agent: *\nAllow: /\nSitemap: https://westcherokeeproperties.com/sitemap-index.xml\n',
+    'User-agent: *\nAllow: /\nSitemap: https://westcherokee.com/sitemap-index.xml\n',
   );
 
   applyStagingNoIndex(dir);

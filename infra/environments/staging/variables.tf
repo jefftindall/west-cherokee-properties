@@ -15,7 +15,7 @@ variable "custom_domain" {
 
 variable "custom_hostnames" {
   type    = list(string)
-  default = ["test.westcherokeeproperties.com"]
+  default = ["test.westcherokee.com"]
 }
 
 variable "github_owner" {

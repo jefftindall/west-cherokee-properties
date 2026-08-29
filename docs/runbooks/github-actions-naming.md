@@ -17,3 +17,4 @@ Display `name:` pattern: `"<Area>: <purpose>"`
 |------|-----------------|---------|
 | `ci-static-analysis.yml` | `CI: static analysis` | PR + push `main` |
 | `cd-main.yml` | `CD: main` | push `main` + dispatch |
+| `maint-enable-auto-merge.yml` | `Maint: enable auto-merge` | PR opened / ready / reopened |

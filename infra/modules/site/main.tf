@@ -37,9 +37,9 @@ locals {
   })
 
   public_site_url = var.environment == "prod" ? (
-    var.custom_domain != "" ? "https://${var.custom_domain}" : "https://westcherokeeproperties.com"
+    var.custom_domain != "" ? "https://${var.custom_domain}" : "https://westcherokee.com"
     ) : (
-    length(var.custom_hostnames) > 0 ? "https://${var.custom_hostnames[0]}" : "https://test.westcherokeeproperties.com"
+    length(var.custom_hostnames) > 0 ? "https://${var.custom_hostnames[0]}" : "https://test.westcherokee.com"
   )
 }
 

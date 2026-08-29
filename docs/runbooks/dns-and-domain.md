@@ -4,8 +4,8 @@ Intended hostnames:
 
 | Environment | Hostname |
 |-------------|----------|
-| Staging | `test.westcherokeeproperties.com` |
-| Production | `westcherokeeproperties.com` and `www` |
+| Staging | `test.westcherokee.com` |
+| Production | `westcherokee.com` and `www` |
 
 After SWA exists, add a custom domain on the Static Web App and create the DNS records Azure shows (usually a CNAME to `*.azurestaticapps.net`, plus TXT validation).
 

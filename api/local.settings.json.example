@@ -6,7 +6,7 @@
     "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
     "SITE_URL": "http://localhost:4321",
     "TURNSTILE_SECRET": "1x0000000000000000000000000000000AA",
-    "CONTACT_NOTIFY_EMAIL": "ops@example.com",
+    "CONTACT_NOTIFY_EMAIL": "info@westcherokee.com",
     "ACS_CONNECTION_STRING": "REPLACE_ME",
     "ACS_EMAIL_SENDER": "REPLACE_ME",
     "SQL_CONNECTION_STRING": "",
