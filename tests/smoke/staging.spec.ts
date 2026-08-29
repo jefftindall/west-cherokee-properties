@@ -12,9 +12,9 @@ test.describe('public smoke', () => {
     await waitForOk(page, '/');
     await expect(page.getByRole('heading', { name: /West Cherokee Properties/i })).toBeVisible();
     await expect(page.getByRole('link', { name: /Start an application/i })).toBeVisible();
-    await expect(page.getByText(/124 W Cherokee/i)).toBeVisible();
-    await expect(page.getByText(/11 Noble/i)).toBeVisible();
-    await expect(page.getByText(/10 Falcon Circle/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /124 W Cherokee/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /11 Noble/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /10 Falcon Circle/i })).toBeVisible();
   });
 
   test('properties, about, apply, and contact render', async ({ page }) => {
