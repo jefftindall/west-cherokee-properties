@@ -68,9 +68,9 @@ resource "github_actions_variable" "prod_hostname" {
 }
 
 resource "github_actions_environment_secret" "swa_deploy_token" {
-  count           = var.manage_github_actions ? 1 : 0
-  environment     = github_repository_environment.this[0].environment
-  repository      = var.github_repo
-  secret_name     = "AZURE_STATIC_WEB_APPS_API_TOKEN"
-  plaintext_value = azurerm_static_web_app.main.api_key
+  count       = var.manage_github_actions ? 1 : 0
+  environment = github_repository_environment.this[0].environment
+  repository  = var.github_repo
+  secret_name = "AZURE_STATIC_WEB_APPS_API_TOKEN"
+  value       = azurerm_static_web_app.main.api_key
 }
