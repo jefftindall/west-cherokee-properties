@@ -63,6 +63,7 @@ module "site" {
   environment                = "prod"
   location                   = var.location
   sql_location               = var.sql_location
+  create_sql                 = var.create_sql
   custom_domain              = var.custom_domain
   custom_hostnames           = var.custom_hostnames
   github_owner               = var.github_owner

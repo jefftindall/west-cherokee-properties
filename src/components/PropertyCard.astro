@@ -13,7 +13,7 @@ const { property } = Astro.props;
 const vacant = propertyHasVacancy(property);
 ---
 
-<article class="overflow-hidden rounded-xl border border-line bg-panel">
+<article class="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-panel">
   <StreetView
     title={property.data.title}
     address={property.data.address}
@@ -24,7 +24,7 @@ const vacant = propertyHasVacancy(property);
     panoId={property.data.panoId}
     compact
   />
-  <div class="p-6">
+  <div class="flex flex-1 flex-col p-6">
     <p class="text-sm uppercase tracking-wide text-grove">
       <NeighborhoodLabel
         label={property.data.neighborhood || `${property.data.city}, ${property.data.state}`}
@@ -48,6 +48,6 @@ const vacant = propertyHasVacancy(property);
         ))
       }
     </ul>
-    <a class="btn-ghost mt-4" href={`/properties/${property.id}`}>See this home</a>
+    <a class="btn-ghost mt-auto pt-4" href={`/properties/${property.id}`}>See this home</a>
   </div>
 </article>

@@ -10,10 +10,6 @@ export function mapsDirectionsUrl(address: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
-export function mapsEmbedUrl(address: string): string {
-  return `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=16&output=embed`;
-}
-
 /** `heading` is the Maps URL `…h` value. `tilt` is `…t` (90 is level). */
 export function streetViewEmbedUrl(
   address: string,

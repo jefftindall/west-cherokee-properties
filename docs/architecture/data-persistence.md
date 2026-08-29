@@ -6,7 +6,7 @@
 
 There is **one application database**: Azure SQL (`wcp`). Git holds public brand copy only. Stripe is the money system of record.
 
-Staging currently has `create_sql = false` because this subscription cannot provision Azure SQL in East US 2 or East US (`ProvisioningDisabled`). `SQL-CONNECTION-STRING` in `kv-wcp-staging` is empty; the Functions API falls back to the in-memory store. Re-enable with `create_sql = true` (and a region Azure allows) when the quota exception lands. Prod still defaults to creating SQL.
+Staging and prod have `create_sql = false` because this subscription cannot provision Azure SQL in East US 2 or East US (`ProvisioningDisabled`). `SQL-CONNECTION-STRING` in the env Key Vaults is empty; the Functions API falls back to the in-memory store. Re-enable with `create_sql = true` (and a region Azure allows) when the quota exception lands.
 
 ## Systems of record
 
