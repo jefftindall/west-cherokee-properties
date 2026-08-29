@@ -153,6 +153,10 @@ jobs:
     needs: [terraform_lint, changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.infra == 'true' && vars.AZURE_TF_CLIENT_ID != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
     strategy:
       fail-fast: false
       matrix:
@@ -180,6 +184,7 @@ jobs:
           ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
           ARM_TENANT_ID: ${{ vars.AZURE_TF_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           terraform init -input=false
           terraform plan -input=false -no-color -out=tfplan
