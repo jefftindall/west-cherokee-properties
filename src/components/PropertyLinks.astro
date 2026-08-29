@@ -1,0 +1,23 @@
+---
+import { mapsDirectionsUrl, mapsSearchUrl, zillowSearchUrl } from '../lib/properties';
+
+interface Props {
+  address: string;
+  zillowUrl?: string;
+}
+
+const { address, zillowUrl } = Astro.props;
+const photosUrl = zillowUrl || zillowSearchUrl(address);
+---
+
+<p class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+  <a class="text-grove underline-offset-2 hover:underline" href={mapsDirectionsUrl(address)} target="_blank" rel="noreferrer">
+    Get directions
+  </a>
+  <a class="text-grove underline-offset-2 hover:underline" href={mapsSearchUrl(address)} target="_blank" rel="noreferrer">
+    Open in Google Maps
+  </a>
+  <a class="text-grove underline-offset-2 hover:underline" href={photosUrl} target="_blank" rel="noreferrer">
+    Photos on Zillow
+  </a>
+</p>

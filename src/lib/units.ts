@@ -2,6 +2,7 @@ export type FloorPlan = {
   label: string;
   bedrooms: number;
   bathrooms: number;
+  available?: boolean;
 };
 
 export function formatBedBath(unit: FloorPlan): string {

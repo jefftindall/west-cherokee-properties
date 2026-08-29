@@ -12,7 +12,7 @@
 
 Smoke covers public routes, robots/sitemap, and anonymous `/office` + `/portal` redirects on SWA hosts.
 
-Journeys cover the visitor path: home → properties → apply, and contact.
+Journeys cover the visitor path: home → properties → a leased home (maps / Zillow links, no apply CTA) → contact.
 
 `BASE_URL` is required for Playwright.
 

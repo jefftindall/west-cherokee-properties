@@ -4,6 +4,8 @@ import { newCorrelationId } from '../lib/auth.js';
 import { failureResponse, jsonOk } from '../lib/httpErrors.js';
 import { verifyTurnstile } from '../lib/turnstile.js';
 import { getStore } from '../lib/store.js';
+import { propertyAcceptsApplications } from '../lib/availability.js';
+import { ValidationError } from '../lib/errors.js';
 
 const applySchema = z.object({
   propertySlug: z.string().trim().min(1).max(64),
@@ -36,9 +38,10 @@ app.http('apply', {
       const store = getStore();
       const properties = await store.listProperties();
       if (!properties.some((p) => p.slug === parsed.data.propertySlug)) {
-        const err = new Error('Unknown community.');
-        err.name = 'ValidationError';
-        throw err;
+        throw new ValidationError('Unknown community.');
+      }
+      if (!propertyAcceptsApplications(parsed.data.propertySlug)) {
+        throw new ValidationError('This home is not accepting applications right now.');
       }
       const application = await store.createApplication(parsed.data);
       return jsonOk({ ok: true, id: application.id, correlationId }, 201);

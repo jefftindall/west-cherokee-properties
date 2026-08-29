@@ -10,8 +10,8 @@ import {
 test.describe('public smoke', () => {
   test('home shows brand and communities', async ({ page }) => {
     await waitForOk(page, '/');
-    await expect(page.getByRole('heading', { name: /West Cherokee Properties/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /Start an application/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Homes near the square/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /See our homes/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /124 W Cherokee/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /11 Noble/i })).toBeVisible();
     await expect(page.getByRole('heading', { name: /10 Falcon Circle/i })).toBeVisible();
@@ -19,13 +19,14 @@ test.describe('public smoke', () => {
 
   test('properties, about, apply, and contact render', async ({ page }) => {
     await waitForOk(page, '/properties');
-    await expect(page.getByRole('heading', { name: 'Properties' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Our homes' })).toBeVisible();
     await waitForOk(page, '/properties/124-w-cherokee');
     await expect(page.getByRole('heading', { name: /124 W Cherokee/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Get directions/i })).toBeVisible();
     await waitForOk(page, '/about');
     await expect(page.getByRole('heading', { name: 'About' })).toBeVisible();
     await waitForOk(page, '/apply');
-    await expect(page.getByRole('heading', { name: /Rental application/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Nothing for rent/i })).toBeVisible();
     await waitForOk(page, '/contact');
     await expect(page.getByRole('heading', { name: 'Contact' })).toBeVisible();
   });

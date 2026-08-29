@@ -12,7 +12,7 @@ Staging currently has `create_sql = false` because this subscription cannot prov
 
 | Concern | Store | What lives there |
 |---------|-------|------------------|
-| **Public brand** | Git (`src/content/`) | Property listings, about page |
+| **Public brand** | Git (`src/content/`) | Property listings, about page, per-unit `available` (applications stay closed when false) |
 | **Operations** | Azure SQL | People, applications, leases, invoices, payments, service requests, office users |
 | **Money** | Stripe | Invoices, charges, receipts |
 | **Secrets** | Key Vault → SWA app settings | API keys, SQL connection, External ID, Turnstile |
@@ -57,7 +57,8 @@ Local/dev and staging (while `create_sql` is false) without `SQL_CONNECTION_STRI
 
 ## Access paths
 
-- Public apply writes `applications`.
+- Public apply writes `applications` only when that property has a unit with `available: true` in `api/src/lib/propertySeed.js` (keep in sync with `src/content/properties`). Otherwise `POST /api/apply` returns 400.
+- A per-property waitlist is planned ([waitlist.md](../plans/waitlist.md)); until then, informal interest goes through contact.
 - Office APIs require catalog permissions.
 - Portal APIs match `people.email_key` to the signed-in email and never return other households' rows.
 - Stripe webhook verifies the signature, then updates the matching invoice by `stripe_invoice_id`.

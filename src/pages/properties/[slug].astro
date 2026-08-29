@@ -1,7 +1,10 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import StreetView from '../../components/StreetView.astro';
+import PropertyLinks from '../../components/PropertyLinks.astro';
 import { getCollection, render } from 'astro:content';
 import { formatFloorPlan } from '../../lib/units';
+import { mapsEmbedUrl, propertyHasVacancy, unitIsAvailable } from '../../lib/properties';
 
 export async function getStaticPaths() {
   const properties = await getCollection('properties');
@@ -13,6 +16,8 @@ export async function getStaticPaths() {
 
 const { property } = Astro.props;
 const { Content } = await render(property);
+const vacant = propertyHasVacancy(property);
+const mapSrc = mapsEmbedUrl(property.data.address);
 ---
 
 <BaseLayout
@@ -22,15 +27,45 @@ const { Content } = await render(property);
 >
   <article class="mx-auto max-w-3xl px-4 py-16">
     <p class="text-sm uppercase tracking-wide text-grove">
-      {property.data.city}, {property.data.state}
+      {property.data.neighborhood || `${property.data.city}, ${property.data.state}`}
     </p>
     <h1 class="font-display mt-2 text-5xl text-pine">{property.data.title}</h1>
-    <p class="mt-4 text-lg text-muted">{property.data.address}</p>
-    <h2 class="mt-8 text-sm font-semibold uppercase tracking-wide text-grove">Units</h2>
+    <p class="mt-3 text-lg text-muted">{property.data.address}</p>
+    <p class:list={['mt-2 text-sm font-semibold', vacant ? 'text-leaf' : 'text-muted']}>
+      {vacant ? 'Accepting applications' : 'Currently leased — we are not taking applications for this address'}
+    </p>
+
+    <div class="mt-8">
+      <StreetView
+        title={property.data.title}
+        address={property.data.address}
+        lat={property.data.lat}
+        lng={property.data.lng}
+      />
+    </div>
+    <PropertyLinks address={property.data.address} zillowUrl={property.data.zillowUrl} />
+
+    <figure class="mt-8 overflow-hidden rounded-xl border border-line bg-panel">
+      <iframe
+        class="h-64 w-full border-0 md:h-80"
+        src={mapSrc}
+        title={`Map of ${property.data.title}`}
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        allowfullscreen
+      ></iframe>
+    </figure>
+
+    <h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-grove">Units</h2>
     <ul class="mt-3 space-y-1 text-lg text-ink">
-      {property.data.units.map((unit) => (
-        <li>{formatFloorPlan(unit)}</li>
-      ))}
+      {
+        property.data.units.map((unit) => (
+          <li>
+            {formatFloorPlan(unit)}
+            <span class="text-muted"> — {unitIsAvailable(unit) ? 'available' : 'leased'}</span>
+          </li>
+        ))
+      }
     </ul>
     {
       property.data.highlights.length > 0 && (
@@ -42,6 +77,16 @@ const { Content } = await render(property);
     <div class="prose-site mt-8 text-ink">
       <Content />
     </div>
-    <a class="btn-primary mt-10" href={`/apply?property=${property.id}`}>Apply to rent here</a>
+    {
+      vacant ? (
+        <a class="btn-primary mt-10" href={`/apply?property=${property.id}`}>
+          Apply to rent here
+        </a>
+      ) : (
+        <p class="mt-10 rounded-xl border border-line bg-panel p-5 text-muted">
+          This address is full. <a class="text-grove underline-offset-2 hover:underline" href="/contact">Tell us which home you like</a> and we will keep you in mind — a formal waitlist is coming.
+        </p>
+      )
+    }
   </article>
 </BaseLayout>

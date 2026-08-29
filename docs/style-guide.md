@@ -10,7 +10,7 @@ Tokens live in [`src/styles/global.css`](../src/styles/global.css). Brand consta
 |---------|--------|
 | Name | West Cherokee Properties |
 | Role | Rental property management |
-| Narrative | Rental homes in Cartersville, Georgia (124 W Cherokee Ave, 11 Noble St, 10 Falcon Circle) |
+| Narrative | A few rental homes in Cartersville: downtown on West Cherokee and Noble, plus Falcon Circle north of town |
 | Tone | Trustworthy, local, residential |
 
 Do not use Broadway / theatre visual language (stage gold, spotlight, gel).

@@ -1,45 +1,40 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PropertyCard from '../components/PropertyCard.astro';
 import { getCollection } from 'astro:content';
-import { site } from '../lib/site';
-import { formatFloorPlan } from '../lib/units';
+import { siteHasVacancy } from '../lib/properties';
 
 const properties = (await getCollection('properties')).sort((a, b) => a.data.order - b.data.order);
+const accepting = siteHasVacancy(properties);
 ---
 
 <BaseLayout>
   <section class="mx-auto max-w-6xl px-4 pb-16 pt-14 md:pb-20 md:pt-20">
     <p class="text-sm font-semibold uppercase tracking-[0.25em] text-clay">Cartersville, Georgia</p>
     <h1 class="font-display mt-3 max-w-3xl text-5xl leading-[0.95] text-pine md:text-7xl">
-      {site.name}
+      Homes near the square — and a quieter street north of town
     </h1>
-    <p class="mt-6 max-w-2xl text-lg text-muted">{site.description}</p>
+    <p class="mt-6 max-w-2xl text-lg text-muted">
+      We look after three addresses: the house at 124 W Cherokee, the cottage next door on Noble, and two units on Falcon Circle. Every home is leased right now. When one opens, we will take applications here.
+    </p>
     <div class="mt-8 flex flex-wrap gap-3">
-      <a class="btn-primary" href="/apply">Start an application</a>
-      <a class="btn-secondary" href="/properties">See our properties</a>
+      <a class="btn-primary" href="/properties">See our homes</a>
+      {
+        accepting ? (
+          <a class="btn-secondary" href="/apply">
+            Start an application
+          </a>
+        ) : (
+          <a class="btn-secondary" href="/contact">
+            Say hello
+          </a>
+        )
+      }
     </div>
   </section>
 
   <section class="mx-auto grid max-w-6xl gap-6 px-4 py-16 md:grid-cols-2 lg:grid-cols-3" aria-labelledby="properties-heading">
     <h2 id="properties-heading" class="sr-only">Properties</h2>
-    {
-      properties.map((property) => (
-        <article class="rounded-xl border border-line bg-panel p-6">
-          <p class="text-sm uppercase tracking-wide text-grove">
-            {property.data.city}, {property.data.state}
-          </p>
-          <h2 class="font-display mt-1 text-3xl text-pine">{property.data.title}</h2>
-          <p class="mt-3 text-muted">{property.data.summary}</p>
-          <ul class="mt-4 space-y-1 text-sm font-semibold text-ink">
-            {property.data.units.map((unit) => (
-              <li>{formatFloorPlan(unit)}</li>
-            ))}
-          </ul>
-          <a class="btn-ghost mt-4" href={`/properties/${property.id}`}>
-            View property
-          </a>
-        </article>
-      ))
-    }
+    {properties.map((property) => <PropertyCard property={property} />)}
   </section>
 </BaseLayout>

@@ -1,0 +1,46 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import StreetView from './StreetView.astro';
+import { formatFloorPlan } from '../lib/units';
+import { propertyHasVacancy, unitIsAvailable } from '../lib/properties';
+
+interface Props {
+  property: CollectionEntry<'properties'>;
+}
+
+const { property } = Astro.props;
+const vacant = propertyHasVacancy(property);
+---
+
+<article class="overflow-hidden rounded-xl border border-line bg-panel">
+  <StreetView
+    title={property.data.title}
+    address={property.data.address}
+    lat={property.data.lat}
+    lng={property.data.lng}
+    compact
+  />
+  <div class="p-6">
+    <p class="text-sm uppercase tracking-wide text-grove">
+      {property.data.neighborhood || `${property.data.city}, ${property.data.state}`}
+    </p>
+    <h2 class="font-display mt-1 text-3xl text-pine">
+      <a class="text-pine no-underline hover:underline" href={`/properties/${property.id}`}>{property.data.title}</a>
+    </h2>
+    <p class:list={['mt-2 text-sm font-semibold', vacant ? 'text-leaf' : 'text-muted']}>
+      {vacant ? 'A unit is available' : 'Currently leased'}
+    </p>
+    <p class="mt-3 text-muted">{property.data.summary}</p>
+    <ul class="mt-4 space-y-1 text-sm font-semibold text-ink">
+      {
+        property.data.units.map((unit) => (
+          <li>
+            {formatFloorPlan(unit)}
+            {unitIsAvailable(unit) ? '' : ' · leased'}
+          </li>
+        ))
+      }
+    </ul>
+    <a class="btn-ghost mt-4" href={`/properties/${property.id}`}>See this home</a>
+  </div>
+</article>
