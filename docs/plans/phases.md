@@ -1,6 +1,6 @@
 # Phased delivery
 
-_Last updated: 2026-08-28._
+_Last updated: 2026-08-29. Staging applied without Azure SQL (`create_sql = false`) after the subscription blocked SQL in East US / East US 2._
 
 | Phase | Status | Notes |
 |-------|--------|-------|

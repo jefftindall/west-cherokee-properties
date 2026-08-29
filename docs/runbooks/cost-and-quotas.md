@@ -10,7 +10,7 @@ Expected retail (order-of-magnitude, two environments):
 | Item | Notes | USD / mo |
 |------|-------|----------|
 | SWA Standard × 2 | `swa-wcp-staging`, `swa-wcp-prod` | ~18 |
-| Azure SQL serverless GP_S_Gen5_1 × 2 | `sql-wcp-staging`, `sql-wcp-prod`; auto-pause 60m, min 0.5 vCore | ~12–25 when idle most of the month |
+| Azure SQL serverless GP_S_Gen5_1 × 2 | `sql-wcp-staging`, `sql-wcp-prod`; auto-pause 60m, min 0.5 vCore. Staging is not created yet (`create_sql = false`; subscription `ProvisioningDisabled` in East US / East US 2) | ~12–25 when both exist and idle most of the month |
 | Key Vault × 3 | `kv-wcp-shared`, `kv-wcp-staging`, `kv-wcp-prod` | ~1 |
 | Log Analytics + App Insights × 2 | 1 GB/day cap | ~2 |
 | Budget buffer | — | — |

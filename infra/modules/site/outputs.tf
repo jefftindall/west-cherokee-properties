@@ -15,7 +15,7 @@ output "key_vault_name" {
 }
 
 output "sql_server_name" {
-  value = azurerm_mssql_server.ops.name
+  value = var.create_sql ? azurerm_mssql_server.ops[0].name : ""
 }
 
 output "application_insights_connection_string" {

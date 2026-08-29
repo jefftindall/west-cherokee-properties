@@ -7,6 +7,18 @@ variable "location" {
   default = "eastus2"
 }
 
+variable "sql_location" {
+  type        = string
+  default     = ""
+  description = "Azure SQL region. Defaults to location. Some new subscriptions block SQL in East US 2."
+}
+
+variable "create_sql" {
+  type        = bool
+  default     = true
+  description = "Set false when the subscription cannot provision Azure SQL in allowed regions."
+}
+
 variable "custom_domain" {
   type    = string
   default = ""

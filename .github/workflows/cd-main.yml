@@ -46,7 +46,7 @@ jobs:
   deploy_staging:
     name: Deploy Staging
     needs: build_release
-    if: vars.AZURE_CLIENT_ID != ''
+    if: vars.STAGING_HOSTNAME != ''
     runs-on: ubuntu-latest
     environment: staging
     outputs:
@@ -116,7 +116,7 @@ jobs:
   deploy_prod:
     name: Deploy Production
     needs: [build_release, smoke_staging]
-    if: vars.AZURE_CLIENT_ID != ''
+    if: vars.PROD_HOSTNAME != ''
     runs-on: ubuntu-latest
     environment: prod
     steps:

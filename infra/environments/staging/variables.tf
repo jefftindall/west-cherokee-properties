@@ -8,6 +8,16 @@ variable "location" {
   default = "eastus2"
 }
 
+variable "sql_location" {
+  type    = string
+  default = "eastus"
+}
+
+variable "create_sql" {
+  type    = bool
+  default = false
+}
+
 variable "custom_domain" {
   type    = string
   default = ""

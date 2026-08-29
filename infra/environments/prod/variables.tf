@@ -8,6 +8,11 @@ variable "location" {
   default = "eastus2"
 }
 
+variable "sql_location" {
+  type    = string
+  default = "eastus"
+}
+
 variable "custom_domain" {
   type    = string
   default = "westcherokee.com"

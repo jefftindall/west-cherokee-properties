@@ -24,11 +24,12 @@ terraform {
 data "azurerm_client_config" "current" {}
 
 locals {
-  name_suffix = var.environment
-  rg_name     = "rg-wcp-${local.name_suffix}"
-  kv_name     = "kv-wcp-${local.name_suffix}"
-  swa_name    = "swa-wcp-${local.name_suffix}"
-  sql_name    = "sql-wcp-${local.name_suffix}"
+  name_suffix  = var.environment
+  rg_name      = "rg-wcp-${local.name_suffix}"
+  kv_name      = "kv-wcp-${local.name_suffix}"
+  swa_name     = "swa-wcp-${local.name_suffix}"
+  sql_name     = "sql-wcp-${local.name_suffix}"
+  sql_location = var.sql_location != "" ? var.sql_location : var.location
 
   tags = merge(var.tags, {
     environment = var.environment
