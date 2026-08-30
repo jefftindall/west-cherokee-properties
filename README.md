@@ -23,7 +23,7 @@ npm run dev
 npm run lint
 ```
 
-Runs Terraform fmt + TFLint + validate, `astro check`, and API syntax checks. The same gates run on every PR via [`.github/workflows/ci-static-analysis.yml`](.github/workflows/ci-static-analysis.yml). Agents must run this before committing (see [AGENTS.md](AGENTS.md)).
+Runs Terraform fmt + TFLint + validate, `astro check`, and API syntax checks. The same gates run on every PR via [`.github/workflows/ci-static-analysis.yml`](.github/workflows/ci-static-analysis.yml). Agents must run this before committing (see [AGENTS.md](AGENTS.md)). Deploys go through a PR and Actions (`CD: main`, `CD: terraform`), not a local `terraform apply`.
 
 API functions (optional local):
 

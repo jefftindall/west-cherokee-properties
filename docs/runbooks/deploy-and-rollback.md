@@ -1,17 +1,20 @@
 # Runbook: Deploy and rollback
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-08-30
 
-CD (`CD: main`, `.github/workflows/cd-main.yml`) builds **once**, deploys that artifact to staging, runs smoke + journeys, then deploys the **same** artifact to production.
+Changes ship through a pull request. Agents must not apply Terraform or deploy from a laptop unless a human explicitly asks.
+
+CD (`CD: main`, `.github/workflows/cd-main.yml`) builds **once**, deploys that artifact to staging, runs smoke + journeys, then deploys the **same** artifact to production. When `infra/` changes on `main`, `CD: terraform` applies the staging and prod stacks.
 
 Repo: `jefftindall/west-cherokee-properties`. Staging host: `test.westcherokee.com`. Prod host: `westcherokee.com`.
 
 ## Happy path
 
 1. Merge to `main` (Protect main + required checks).
-2. Build release artifact (`dist` + `api`).
-3. Staging: apply noindex patch, SWA deploy, smoke, journeys.
-4. Production: SWA deploy, smoke (canary; does not auto-rollback).
+2. If `infra/` changed: `CD: terraform` applies staging then prod.
+3. `CD: main` builds the release artifact (`dist` + `api`).
+4. Staging: apply noindex patch, SWA deploy, smoke, journeys.
+5. Production: SWA deploy, smoke (canary; does not auto-rollback).
 
 ```bash
 gh workflow list --repo jefftindall/west-cherokee-properties
@@ -22,21 +25,17 @@ gh run watch --repo jefftindall/west-cherokee-properties
 
 Job-level `if:` cannot see GitHub Environment variables. CD deploys staging when the **repo** var `STAGING_HOSTNAME` is set (written by the staging Terraform stack from the SWA default host). Prod stays skipped until `PROD_HOSTNAME` is set the same way. `AZURE_CLIENT_ID` lives on the `staging` / `prod` environments and is only used inside those jobs after they start.
 
-## Local Terraform (not in CD until OIDC env identities exist)
+## Terraform (staging / prod)
+
+PRs that touch `infra/` run **Plan staging** and **Plan prod**. Merge to `main` runs `CD: terraform` (OIDC + GitHub App token, same as the plan jobs).
 
 ```bash
-az account set --subscription 5f82b068-cbaa-40bf-9d56-e9932a64a41c
-
-cd infra/environments/staging
-terraform init -input=false
-terraform plan -input=false -out=tfplan
-terraform apply tfplan
-
-cd ../prod
-terraform init -input=false
-terraform plan -input=false -out=tfplan
-terraform apply tfplan
+gh workflow list --repo jefftindall/west-cherokee-properties
+gh workflow run "CD: terraform" --repo jefftindall/west-cherokee-properties
+gh run list --repo jefftindall/west-cherokee-properties --workflow=cd-terraform.yml --limit 5
 ```
+
+Do not `terraform apply` locally for these stacks unless a human explicitly asks. Bootstrap (`infra/bootstrap`) is local state and stays a one-time human apply — [setup.md](../setup.md).
 
 State: `rg-wcp-tfstate` / `stwcpstateeu2` / `tfstate` keys `west-cherokee-properties/staging.tfstate` and `west-cherokee-properties/prod.tfstate`.
 

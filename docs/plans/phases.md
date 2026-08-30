@@ -1,6 +1,6 @@
 # Phased delivery
 
-_Last updated: 2026-08-29. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned._
+_Last updated: 2026-08-30. Azure SQL is in Central US (East US / East US 2 still `ProvisioningDisabled`). Env Terraform applies via `CD: terraform` after merge. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned._
 
 | Phase | Status | Notes |
 |-------|--------|-------|

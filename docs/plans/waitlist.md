@@ -32,8 +32,8 @@ Every unit is leased today. The public site closes `/apply` until a unit is mark
 
 - Ranking, deposits, or “first in line gets the key”.
 - SMS unless we already have a reviewed messaging path.
-- Prod SQL until the subscription can provision Azure SQL.
 
 ## Revision notes
 
 - 2026-08-29: Added after the public site stopped taking applications while all five units are leased.
+- 2026-08-29: Azure SQL is in Central US (`create_sql = true`); durable waitlist is no longer blocked on provisioning.

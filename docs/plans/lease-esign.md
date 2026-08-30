@@ -86,7 +86,7 @@ The lease is **fully executed** only when every required signer row has `signed_
 - Reuse ACS the same way contact already does. Do not add a new email vendor.
 - Signature evidence to store: signer id, UTC time, display name as signed, image or typed-name hash, and that a code was verified. Do not store the plaintext code. Do not treat the Entra session alone as the signature.
 - Partial execution is normal: tenant A signed, tenant B has not. Download and office UI must show that state.
-- Prod SQL is still blocked on the subscription quota (`create_sql = false`). Memory store must implement the same signer + code behavior for tests and `func start`.
+- Memory store must implement the same signer + code behavior for tests and `func start` (no local SQL required). Staging/prod SQL is in Central US.
 
 ## Revision notes
 

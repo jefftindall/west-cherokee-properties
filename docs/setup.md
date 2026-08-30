@@ -20,8 +20,8 @@ Provision Azure with Terraform (bootstrap + staging/prod), connect GitHub, store
 | Path | Purpose |
 |------|---------|
 | `infra/bootstrap` | Remote state + shared KV + Terraform OIDC (local state, East US 2) |
-| `infra/environments/staging` | Staging SWA + env KV (`create_sql` is false until Azure SQL quota is available) |
-| `infra/environments/prod` | Production SWA + env KV (`create_sql` is false until Azure SQL quota is available) |
+| `infra/environments/staging` | Staging SWA + env KV + Azure SQL in Central US |
+| `infra/environments/prod` | Production SWA + env KV + Azure SQL in Central US |
 | `infra/modules/site` | Shared module |
 
 Names use the `wcp` prefix so they never collide with other projects on the same subscription.
@@ -58,16 +58,11 @@ Or import from a downloaded PEM:
 node scripts/register-wcp-github-app.mjs --app-id <id> --pem-file /path/to/app.pem --installation-id <id>
 ```
 
-## 2. Apply staging, then prod
+## 2. Staging and prod (PR, then automation)
 
-```bash
-cd infra/environments/staging
-terraform init -input=false
-terraform plan -input=false -out=tfplan
-terraform apply tfplan
-```
+Change `infra/environments/*` on a branch. CI plans both stacks. Merge to `main` so `CD: terraform` applies. Do not apply these stacks from a laptop unless a human explicitly asks.
 
-Copy `AAD-CLIENT-ID` / `AAD-CLIENT-SECRET` and `STRIPE-WEBHOOK-SECRET` from the env Key Vault into SWA app settings (`AAD_CLIENT_ID`, `AAD_CLIENT_SECRET`, `STRIPE_WEBHOOK_SECRET`) so Easy Auth and webhooks work. Create the Stripe webhook endpoint in the Dashboard (test for staging, live for prod) pointing at `https://<swa-host>/api/stripeWebhook` with events `invoice.paid`, `invoice.payment_failed`, `invoice.finalized`, `checkout.session.completed`, and `charge.refunded`. Staging has `RENT_PAYMENTS_ENABLED=true`; prod stays false until go-live.
+After the stacks exist, copy `AAD-CLIENT-ID` / `AAD-CLIENT-SECRET` and `STRIPE-WEBHOOK-SECRET` from the env Key Vault into SWA app settings (`AAD_CLIENT_ID`, `AAD_CLIENT_SECRET`, `STRIPE_WEBHOOK_SECRET`) so Easy Auth and webhooks work. Create the Stripe webhook endpoint in the Dashboard (test for staging, live for prod) pointing at `https://<swa-host>/api/stripeWebhook` with events `invoice.paid`, `invoice.payment_failed`, `invoice.finalized`, `checkout.session.completed`, and `charge.refunded`. Staging has `RENT_PAYMENTS_ENABLED=true`; prod stays false until go-live.
 
 ## 3. External ID
 
