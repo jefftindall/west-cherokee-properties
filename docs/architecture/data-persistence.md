@@ -15,7 +15,7 @@ Staging and prod have `create_sql = false` because this subscription cannot prov
 | **Public brand** | Git (`src/content/`) | Property listings, about page, per-unit `available` (applications stay closed when false) |
 | **Operations** | Azure SQL | People, applications, leases, invoices, payments, service requests, office users |
 | **Money** | Stripe | Invoices, charges, receipts |
-| **Secrets** | Key Vault → SWA app settings | API keys, SQL connection, External ID, Turnstile |
+| **Secrets** | Key Vault → SWA app settings; shared KV also holds the GitHub App PEM for CI | API keys, SQL connection, External ID, Turnstile, `wcp-terraform` credentials |
 | **Staff identity** | Microsoft Entra (workforce) | Who can complete office login |
 | **Renter identity** | Microsoft Entra External ID | Who can complete portal login |
 
@@ -62,3 +62,4 @@ Local/dev and staging (while `create_sql` is false) without `SQL_CONNECTION_STRI
 - Office APIs require catalog permissions.
 - Portal APIs match `people.email_key` to the signed-in email and never return other households' rows.
 - Stripe webhook verifies the signature, then updates the matching invoice by `stripe_invoice_id`.
+- CI Terraform plan downloads `GITHUB-APP-PRIVATE-KEY` from `kv-wcp-shared` (`az keyvault secret download`, never `show`) and mints a short-lived installation token. App id and installation id are repo Actions variables (`GH_APP_ID`, `GH_APP_INSTALLATION_ID`) set by `scripts/register-wcp-github-app.mjs`, not by Terraform. The PEM is not a Terraform data source. Local bootstrap apply still uses `GH_TOKEN` from `gh auth token` to write `AZURE_TF_*` Actions variables.

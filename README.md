@@ -56,7 +56,7 @@ Authentication and authorization are separate. Staff sign in with workforce Entr
 
 | Path | Purpose |
 |------|---------|
-| `infra/bootstrap` | Remote state storage + Terraform OIDC identity (local Terraform state, East US 2) |
+| `infra/bootstrap` | Remote state storage + Terraform OIDC identity + shared KV / GitHub App placeholders (local Terraform state, East US 2) |
 | `infra/environments/staging` | Staging stack |
 | `infra/environments/prod` | Production stack |
 | `infra/modules/site` | Shared SWA + Key Vault + SQL + Stripe webhook module |
