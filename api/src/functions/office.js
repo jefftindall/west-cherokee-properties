@@ -8,6 +8,7 @@ import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
 import { getStore } from '../lib/store.js';
+import { buildDashboard } from '../lib/unitHealth.js';
 import {
   createStripeInvoiceForRow,
   rentPaymentsEnabled,
@@ -33,6 +34,64 @@ app.http('officeHealth', {
   handler: wrap(async (request) => {
     const caller = await officeCaller(request);
     return jsonOk({ ok: true, email: caller.email });
+  }),
+});
+
+app.http('officeDashboard', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/dashboard',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_READ);
+    const store = getStore();
+    const [properties, units, leases, people, invoices] = await Promise.all([
+      store.listProperties(),
+      store.listUnits(),
+      store.listLeases(),
+      store.listPeople(),
+      store.listInvoices(),
+    ]);
+    return jsonOk(buildDashboard({ properties, units, leases, people, invoices }));
+  }),
+});
+
+app.http('officeUnitGet', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/units/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_READ);
+    const store = getStore();
+    const unit = await store.getUnit(request.params.id);
+    if (!unit) {
+      const err = new Error('Unit not found.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const [properties, lease, people] = await Promise.all([
+      store.listProperties(),
+      store.getActiveLeaseForUnit(unit.id),
+      store.listPeople(),
+    ]);
+    const property = properties.find((row) => row.id === unit.propertyId) || null;
+    const tenant = lease ? people.find((person) => person.id === lease.personId) || null : null;
+    return jsonOk({ unit, property, lease, tenant, unitDefaults: UNIT_LEASE_DEFAULTS[unit.id] || null });
+  }),
+});
+
+app.http('officeUnitPatch', {
+  methods: ['PATCH'],
+  authLevel: 'anonymous',
+  route: 'office/units/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_WRITE);
+    const body = z
+      .object({
+        available: z.boolean(),
+      })
+      .parse(await request.json());
+    const unit = await getStore().updateUnit(request.params.id, body);
+    return jsonOk({ unit });
   }),
 });
 
@@ -260,10 +319,15 @@ app.http('officeInvoicesPost', {
     if (rentPaymentsEnabled() && process.env.STRIPE_SECRET_KEY?.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.includes('not_configured')) {
       const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
       const person = await store.getPerson(lease.personId);
-      const customer = await stripe.customers.create({ email: person.email, name: person.displayName });
+      let customerId = String(person.stripeCustomerId || '').trim();
+      if (!customerId) {
+        const customer = await stripe.customers.create({ email: person.email, name: person.displayName });
+        customerId = customer.id;
+        await store.updatePersonStripeCustomerId(person.id, customerId);
+      }
       const stripeInv = await createStripeInvoiceForRow({
         stripe,
-        customerId: customer.id,
+        customerId,
         appInvoice: invoice,
         siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
       });

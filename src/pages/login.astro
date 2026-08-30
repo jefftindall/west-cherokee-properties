@@ -13,8 +13,28 @@ import Logo from '../components/Logo.astro';
       Staff and residents use different directories. Renters are never added to the office Microsoft tenant.
     </p>
     <div class="mt-10 grid gap-4">
-      <a class="btn-secondary" href="/.auth/login/aad?post_login_redirect_uri=/office">Staff office</a>
-      <a class="btn-primary" href="/.auth/login/externalid?post_login_redirect_uri=/portal">Resident portal</a>
+      <a id="staff-login" class="btn-secondary" href="/.auth/login/aad?post_login_redirect_uri=/office">Staff office</a>
+      <a id="portal-login" class="btn-primary" href="/.auth/login/externalid?post_login_redirect_uri=/portal">Resident portal</a>
     </div>
   </section>
+  <script>
+    function safeReturnUrl(value: string | null) {
+      if (!value || !value.startsWith('/') || value.startsWith('//')) return null;
+      const path = value.split('?')[0];
+      if (path.startsWith('/office') || path.startsWith('/portal')) return value;
+      return null;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const returnUrl = safeReturnUrl(params.get('returnUrl') || '');
+    const staff = document.getElementById('staff-login') as HTMLAnchorElement | null;
+    const portal = document.getElementById('portal-login') as HTMLAnchorElement | null;
+
+    if (returnUrl && staff) {
+      staff.href = `/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(returnUrl)}`;
+    }
+    if (returnUrl?.startsWith('/portal') && portal) {
+      portal.href = `/.auth/login/externalid?post_login_redirect_uri=${encodeURIComponent(returnUrl)}`;
+    }
+  </script>
 </BaseLayout>

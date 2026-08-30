@@ -3,36 +3,117 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import OfficeNav from '../../components/OfficeNav.astro';
 ---
 
-<BaseLayout title="Office" description="Staff workspace" noIndex hideNav hideFooter>
+<BaseLayout title="Office dashboard" description="Property and unit health" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
-    <h1 class="font-display text-4xl text-pine">Office</h1>
-    <p class="mt-3 text-muted">Applications, leases, invoices, and service requests for every property.</p>
-    <ul class="mt-8 grid gap-4 md:grid-cols-2">
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/applications">Applications</a></li>
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/renters">Renters</a></li>
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/leases">Leases</a></li>
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/invoices">Invoices</a></li>
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/requests">Service requests</a></li>
-      <li><a class="block rounded-lg border border-line bg-panel p-5 no-underline" href="/office/access">Access</a></li>
-    </ul>
-    <p id="office-health" class="mt-8 text-sm text-muted" data-testid="office-health">Checking session…</p>
+    <h1 class="font-display text-4xl text-pine">Dashboard</h1>
+    <p class="mt-2 text-muted">
+      Unit health from live lease and invoice data. Green is current, yellow is within grace, red is late after the fee applies, vacant has no active lease.
+    </p>
+    <p id="dashboard-status" class="mt-4 text-sm text-muted" role="status">Loading dashboard…</p>
+    <div id="dashboard-root" class="mt-8 grid gap-8"></div>
   </section>
   <script>
-    const el = document.getElementById('office-health');
-    fetch('/api/office/health')
+    type Health = 'green' | 'yellow' | 'red' | 'vacant';
+    type DashboardUnit = {
+      id: string;
+      label: string;
+      bedrooms: number;
+      bathrooms: number;
+      available: boolean;
+      health: Health;
+      tenant?: { displayName: string; email: string } | null;
+      lease?: { startDate: string; endDate: string; rentCents: number } | null;
+    };
+    type DashboardProperty = {
+      title: string;
+      address: string;
+      units: DashboardUnit[];
+    };
+    type DashboardData = {
+      asOf: string;
+      properties: DashboardProperty[];
+    };
+
+    const HEALTH_LABELS: Record<Health, string> = {
+      green: 'Current',
+      yellow: 'Grace',
+      red: 'Late',
+      vacant: 'Vacant',
+    };
+
+    const HEALTH_CLASSES = {
+      green: 'border-emerald-300 bg-emerald-50',
+      yellow: 'border-amber-300 bg-amber-50',
+      red: 'border-red-300 bg-red-50',
+      vacant: 'border-line bg-panel',
+    };
+
+    const status = document.getElementById('dashboard-status');
+    const root = document.getElementById('dashboard-root');
+
+    function formatMoney(cents: number) {
+      return `$${(Number(cents) / 100).toFixed(2)}`;
+    }
+
+    function renderDashboard(data: DashboardData) {
+      if (!root) return;
+      root.innerHTML = (data.properties || [])
+        .map(
+          (property: DashboardProperty) => `
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <h2 class="font-display text-2xl text-pine">${property.title}</h2>
+          <p class="mt-1 text-sm text-muted">${property.address}</p>
+          <ul class="mt-4 grid gap-3 md:grid-cols-2">
+            ${property.units
+              .map(
+                (unit: DashboardUnit) => `
+              <li class="rounded-lg border p-4 ${HEALTH_CLASSES[unit.health] || HEALTH_CLASSES.vacant}">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="font-semibold text-pine">Unit ${unit.label}</div>
+                    <div class="text-sm text-muted">${unit.bedrooms} bed · ${unit.bathrooms} bath</div>
+                  </div>
+                  <span class="rounded-full px-2 py-1 text-xs font-semibold uppercase tracking-wide">${HEALTH_LABELS[unit.health] || unit.health}</span>
+                </div>
+                ${
+                  unit.tenant
+                    ? `<p class="mt-3 text-sm"><span class="font-semibold">${unit.tenant.displayName}</span><br />${unit.tenant.email}</p>`
+                    : `<p class="mt-3 text-sm text-muted">${unit.available ? 'Marked available for applications' : 'No active lease'}</p>`
+                }
+                ${
+                  unit.lease
+                    ? `<p class="mt-2 text-sm text-muted">Lease ${unit.lease.startDate} – ${unit.lease.endDate} · ${formatMoney(unit.lease.rentCents)}/mo</p>`
+                    : ''
+                }
+                <p class="mt-4">
+                  <a class="btn-ghost text-sm" href="/office/unit?unitId=${encodeURIComponent(unit.id)}">Manage unit</a>
+                </p>
+              </li>
+            `,
+              )
+              .join('')}
+          </ul>
+        </article>
+      `,
+        )
+        .join('');
+    }
+
+    fetch('/api/office/dashboard')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
-        if (!el) return;
-        if (res.ok) {
-          el.id = 'office-health-ok';
-          el.textContent = `Signed in${json.email ? ` as ${json.email}` : ''}.`;
-        } else {
-          el.textContent = json.error || 'Not authorized for office tools.';
+        if (!res.ok) {
+          if (status) status.textContent = json.error || 'Could not load dashboard.';
+          return;
         }
+        if (status) {
+          status.textContent = `As of ${new Date(json.asOf).toLocaleString('en-US', { timeZone: 'America/New_York' })} (New York).`;
+        }
+        renderDashboard(json);
       })
       .catch(() => {
-        if (el) el.textContent = 'Office API is not reachable locally unless Functions are running.';
+        if (status) status.textContent = 'Office API is not reachable locally unless Functions are running.';
       });
   </script>
 </BaseLayout>

@@ -1,0 +1,96 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Manage unit" description="Unit availability and lease summary" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-3xl px-4 py-10">
+    <p class="text-sm"><a class="btn-ghost" href="/office">Back to dashboard</a></p>
+    <h1 class="font-display mt-4 text-4xl text-pine">Manage unit</h1>
+    <p id="unit-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
+    <div id="unit-panel" class="mt-6 hidden rounded-lg border border-line bg-panel p-5"></div>
+  </section>
+  <script>
+    function safeReturnUrl() {
+      return encodeURIComponent(window.location.pathname + window.location.search);
+    }
+
+    async function ensureOfficeAuth() {
+      const res = await fetch('/api/office/health');
+      if (res.ok) return true;
+      window.location.href = `/login?returnUrl=${safeReturnUrl()}`;
+      return false;
+    }
+
+    function formatMoney(cents: number) {
+      return `$${(Number(cents) / 100).toFixed(2)}`;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const unitId = params.get('unitId');
+    const status = document.getElementById('unit-status');
+    const panel = document.getElementById('unit-panel');
+
+    async function loadUnit() {
+      if (!unitId) {
+        if (status) status.textContent = 'Missing unitId query parameter.';
+        return;
+      }
+      if (!(await ensureOfficeAuth())) return;
+
+      const res = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (status) status.textContent = json.error || 'Unit not found.';
+        return;
+      }
+
+      const { unit, property, lease, tenant } = json;
+      if (status) status.textContent = `${property?.title || 'Property'} · Unit ${unit.label}`;
+      if (!panel) return;
+
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <dl class="grid gap-3 text-sm md:grid-cols-2">
+          <div><dt class="font-semibold text-pine">Property</dt><dd>${property?.title || '—'}</dd></div>
+          <div><dt class="font-semibold text-pine">Bed / bath</dt><dd>${unit.bedrooms} / ${unit.bathrooms}</dd></div>
+          <div><dt class="font-semibold text-pine">Tenant</dt><dd>${tenant ? `${tenant.displayName} (${tenant.email})` : 'None'}</dd></div>
+          <div><dt class="font-semibold text-pine">Lease</dt><dd>${
+            lease ? `${lease.startDate} – ${lease.endDate} · ${formatMoney(lease.rentCents)}/mo` : 'No active lease'
+          }</dd></div>
+        </dl>
+        <form id="availability-form" class="mt-6 flex flex-wrap items-end gap-4 border-t border-line pt-6">
+          <label class="flex items-center gap-2 text-sm font-semibold">
+            <input id="available" name="available" type="checkbox" ${unit.available ? 'checked' : ''} />
+            Accepting applications
+          </label>
+          <button class="btn-primary" type="submit">Save availability</button>
+        </form>
+        ${
+          lease
+            ? `<p class="mt-6"><a class="btn-secondary" href="/office/leases">View leases</a></p>`
+            : ''
+        }
+      `;
+
+      document.getElementById('availability-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const available = (document.getElementById('available') as HTMLInputElement | null)?.checked ?? false;
+        const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ available }),
+        });
+        const saveJson = await saveRes.json().catch(() => ({}));
+        if (status) {
+          status.textContent = saveRes.ok
+            ? `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`
+            : saveJson.error || 'Could not save availability.';
+        }
+      });
+    }
+
+    loadUnit();
+  </script>
+</BaseLayout>
