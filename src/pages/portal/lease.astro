@@ -3,22 +3,51 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PortalNav from '../../components/PortalNav.astro';
 ---
 
-<BaseLayout title="Your lease" description="Lease details" noIndex hideNav hideFooter>
+<BaseLayout title="Your lease" description="Download your current lease" noIndex hideNav hideFooter>
   <PortalNav />
-  <section class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="font-display text-4xl text-pine">Lease</h1>
-    <pre id="lease" class="mt-6 overflow-x-auto rounded bg-panel p-4 text-sm"></pre>
+  <section class="mx-auto max-w-4xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Your lease</h1>
+    <p class="mt-2 text-muted">This is the current lease on file for your household. Print or download a copy anytime.</p>
+    <p id="lease-actions" class="mt-4 flex flex-wrap gap-3"></p>
+    <p id="lease-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
+    <iframe id="lease-frame" title="Your lease" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
   <script>
-    const el = document.getElementById('lease');
+    const actions = document.getElementById('lease-actions');
+    const status = document.getElementById('lease-status');
+    const frame = document.getElementById('lease-frame') as HTMLIFrameElement | null;
+
     fetch('/api/portal/lease')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
-        if (!el) return;
-        el.textContent = res.ok ? JSON.stringify(json.lease || json, null, 2) : json.error || 'Could not load lease.';
+        if (!res.ok) {
+          if (status) status.textContent = json.error || 'Could not load lease.';
+          return;
+        }
+        if (!json.lease) {
+          if (status) {
+            status.innerHTML =
+              'No lease is on file for this sign-in yet. If you already live with us, write <a href="/contact">the office</a> so we can link your account.';
+          }
+          if (frame) frame.remove();
+          return;
+        }
+        if (actions) {
+          actions.innerHTML = `
+            <button class="btn-primary" type="button" id="print-lease">Print</button>
+            <a class="btn-secondary" href="/api/portal/lease/document?download=1">Download</a>
+          `;
+          document.getElementById('print-lease')?.addEventListener('click', () => frame?.contentWindow?.print());
+        }
+        if (frame) {
+          frame.src = '/api/portal/lease/document';
+          frame.addEventListener('load', () => {
+            if (status) status.textContent = 'This is your current lease.';
+          });
+        }
       })
       .catch(() => {
-        if (el) el.textContent = 'Portal API is not reachable.';
+        if (status) status.textContent = 'Portal API is not reachable.';
       });
   </script>
 </BaseLayout>

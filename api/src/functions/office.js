@@ -1,7 +1,9 @@
 import { app } from '@azure/functions';
 import { z } from 'zod';
 import { newCorrelationId } from '../lib/auth.js';
-import { failureResponse, jsonOk } from '../lib/httpErrors.js';
+import { failureResponse, htmlOk, jsonOk } from '../lib/httpErrors.js';
+import { buildLeaseDocument } from '../lib/leaseDocument.js';
+import { defaultTermsForUnit, monthlyChargeCents, UNIT_LEASE_DEFAULTS } from '../lib/leaseTerms.js';
 import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
@@ -96,7 +98,9 @@ app.http('officeLeasesGet', {
   route: 'office/leases',
   handler: wrap(async (request) => {
     await permissionGate(request, PERMISSION.LEASES_READ);
-    return jsonOk({ leases: await getStore().listLeases() });
+    const store = getStore();
+    const [leases, units, people] = await Promise.all([store.listLeases(), store.listUnits(), store.listPeople()]);
+    return jsonOk({ leases, units, people, unitDefaults: UNIT_LEASE_DEFAULTS });
   }),
 });
 
@@ -110,15 +114,110 @@ app.http('officeLeasesPost', {
       .object({
         unitId: z.string().min(1),
         personEmail: z.email(),
+        personName: z.string().trim().max(200).optional(),
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
+        terms: z
+          .object({
+            tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
+            authorizedOccupants: z.string().optional(),
+            maxOccupants: z.number().int().min(1).max(12).optional(),
+            securityDepositCents: z.number().int().positive().optional(),
+            petCount: z.number().int().min(0).max(8).optional(),
+            approvedPets: z.string().max(400).optional(),
+            additionalProvisions: z.string().max(4000).optional(),
+            landlordSignerName: z.string().max(200).optional(),
+            effectiveDate: z.string().optional(),
+          })
+          .optional(),
       })
       .parse(await request.json());
     const store = getStore();
-    const person = await store.upsertPerson({ displayName: body.personEmail, email: body.personEmail });
-    const lease = await store.createLease({ ...body, personId: person.id });
+    const firstTenantName = Array.isArray(body.terms?.tenantNames)
+      ? body.terms.tenantNames[0]
+      : body.terms?.tenantNames;
+    const person = await store.upsertPerson({
+      displayName: body.personName || firstTenantName || body.personEmail,
+      email: body.personEmail,
+    });
+    const terms = defaultTermsForUnit(body.unitId, {
+      ...body.terms,
+      rentCents: body.rentCents,
+      startDate: body.startDate,
+      displayName: person.displayName,
+    });
+    const lease = await store.createLease({ ...body, personId: person.id, terms });
     return jsonOk({ lease }, 201);
+  }),
+});
+
+app.http('officeLeaseGet', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/leases/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_READ);
+    const store = getStore();
+    const lease = await store.getLease(request.params.id);
+    if (!lease) {
+      const err = new Error('Lease not found.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const [person, unit] = await Promise.all([store.getPerson(lease.personId), store.getUnit(lease.unitId)]);
+    return jsonOk({ lease, person, unit, unitDefaults: UNIT_LEASE_DEFAULTS[lease.unitId] || null });
+  }),
+});
+
+app.http('officeLeasePatch', {
+  methods: ['PATCH'],
+  authLevel: 'anonymous',
+  route: 'office/leases/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_WRITE);
+    const body = z
+      .object({
+        startDate: z.string().min(8).optional(),
+        endDate: z.string().min(8).optional(),
+        rentCents: z.number().int().positive().optional(),
+        terms: z
+          .object({
+            tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
+            authorizedOccupants: z.string().optional(),
+            maxOccupants: z.number().int().min(1).max(12).optional(),
+            securityDepositCents: z.number().int().positive().optional(),
+            petCount: z.number().int().min(0).max(8).optional(),
+            approvedPets: z.string().max(400).optional(),
+            additionalProvisions: z.string().max(4000).optional(),
+            landlordSignerName: z.string().max(200).optional(),
+            effectiveDate: z.string().optional(),
+          })
+          .optional(),
+      })
+      .parse(await request.json());
+    const lease = await getStore().updateLease(request.params.id, body);
+    return jsonOk({ lease });
+  }),
+});
+
+app.http('officeLeaseDocument', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/leases/{id}/document',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_READ);
+    const store = getStore();
+    const lease = await store.getLease(request.params.id);
+    if (!lease) {
+      const err = new Error('Lease not found.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const person = await store.getPerson(lease.personId);
+    const document = buildLeaseDocument({ lease, person });
+    const download = new URL(request.url).searchParams.get('download') === '1';
+    return htmlOk(document.html, { filename: document.filename, download });
   }),
 });
 
@@ -156,7 +255,7 @@ app.http('officeInvoicesPost', {
       leaseId: lease.id,
       periodStart: body.periodStart,
       periodEnd: body.periodEnd,
-      amountCents: lease.rentCents,
+      amountCents: monthlyChargeCents(lease.rentCents, lease.terms?.petCount),
     });
     if (rentPaymentsEnabled() && process.env.STRIPE_SECRET_KEY?.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.includes('not_configured')) {
       const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);

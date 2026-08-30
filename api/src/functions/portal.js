@@ -1,7 +1,8 @@
 import { app } from '@azure/functions';
 import { z } from 'zod';
 import { newCorrelationId } from '../lib/auth.js';
-import { failureResponse, jsonOk } from '../lib/httpErrors.js';
+import { failureResponse, htmlOk, jsonOk } from '../lib/httpErrors.js';
+import { buildLeaseDocument } from '../lib/leaseDocument.js';
 import { portalCaller } from '../lib/officeAccess.js';
 import { invoiceOwnedByPerson } from '../lib/invoices.js';
 import { requestOwnedByPerson } from '../lib/serviceRequests.js';
@@ -44,7 +45,31 @@ app.http('portalLease', {
     if (!person) return jsonOk({ lease: null });
     const leases = await getStore().getLeasesForPerson(person.id);
     const lease = leases.find((row) => row.status === 'active') || leases[0] || null;
-    return jsonOk({ lease });
+    return jsonOk({ lease, person });
+  }),
+});
+
+app.http('portalLeaseDocument', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'portal/lease/document',
+  handler: wrap(async (request) => {
+    const { person } = await personForPortal(request);
+    if (!person) {
+      const err = new Error('No renter record is on file for this sign-in.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const leases = await getStore().getLeasesForPerson(person.id);
+    const lease = leases.find((row) => row.status === 'active') || leases[0] || null;
+    if (!lease) {
+      const err = new Error('No lease is on file for this sign-in.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const document = buildLeaseDocument({ lease, person });
+    const download = new URL(request.url).searchParams.get('download') === '1';
+    return htmlOk(document.html, { filename: document.filename, download });
   }),
 });
 

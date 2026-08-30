@@ -14,3 +14,16 @@ test('normalizeLease requires rent cents', () => {
     /rentCents/,
   );
 });
+
+test('normalizeLease stores pet terms', () => {
+  const lease = normalizeLease({
+    unitId: 'unit-11-noble',
+    personId: 'p1',
+    startDate: '2026-09-01',
+    endDate: '2027-08-31',
+    rentCents: 90000,
+    terms: { tenantNames: 'Jordan Tenant', petCount: 2, approvedPets: 'Two dogs', securityDepositCents: 90000 },
+  });
+  assert.equal(lease.terms.petCount, 2);
+  assert.equal(lease.terms.approvedPets, 'Two dogs');
+});

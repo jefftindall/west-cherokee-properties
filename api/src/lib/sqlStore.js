@@ -196,9 +196,10 @@ export function createSqlStore(connectionString) {
           .input('endDate', sql.Date, row.endDate)
           .input('rentCents', sql.Int, row.rentCents)
           .input('status', sql.NVarChar, row.status)
+          .input('termsJson', sql.NVarChar, JSON.stringify(row.terms || {}))
           .query(
-            `INSERT INTO dbo.leases (id, unit_id, person_id, start_date, end_date, rent_cents, status)
-             VALUES (@id, @unitId, @personId, @startDate, @endDate, @rentCents, @status)`,
+            `INSERT INTO dbo.leases (id, unit_id, person_id, start_date, end_date, rent_cents, status, terms_json)
+             VALUES (@id, @unitId, @personId, @startDate, @endDate, @rentCents, @status, @termsJson)`,
           );
       } catch (err) {
         if (String(err.message || '').includes('ux_leases_one_active_unit')) {
@@ -208,15 +209,43 @@ export function createSqlStore(connectionString) {
       }
       return row;
     },
+    async updateLease(id, patch) {
+      const existing = await this.getLease(id);
+      if (!existing) throw new NotFoundError('Lease not found.');
+      const row = normalizeLease({
+        ...existing,
+        ...patch,
+        id,
+        terms: { ...existing.terms, ...patch.terms },
+      });
+      const p = await pool();
+      const result = await p
+        .request()
+        .input('id', sql.NVarChar, id)
+        .input('startDate', sql.Date, row.startDate)
+        .input('endDate', sql.Date, row.endDate)
+        .input('rentCents', sql.Int, row.rentCents)
+        .input('status', sql.NVarChar, row.status)
+        .input('termsJson', sql.NVarChar, JSON.stringify(row.terms || {}))
+        .query(
+          `UPDATE dbo.leases SET start_date = @startDate, end_date = @endDate, rent_cents = @rentCents,
+           status = @status, terms_json = @termsJson WHERE id = @id`,
+        );
+      if (!result.rowsAffected[0]) throw new NotFoundError('Lease not found.');
+      return row;
+    },
     async listLeases() {
       const p = await pool();
       const result = await p.request().query(`
         SELECT id, unit_id AS unitId, person_id AS personId,
                CONVERT(char(10), start_date, 23) AS startDate,
                CONVERT(char(10), end_date, 23) AS endDate,
-               rent_cents AS rentCents, status
+               rent_cents AS rentCents, status, terms_json AS termsJson
         FROM dbo.leases`);
-      return result.recordset;
+      return result.recordset.map(({ termsJson, ...row }) => ({
+        ...row,
+        terms: parseJson(termsJson, {}),
+      }));
     },
     async getLease(id) {
       const rows = await this.listLeases();

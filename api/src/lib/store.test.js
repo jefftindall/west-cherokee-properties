@@ -33,6 +33,8 @@ test('approve application creates a person and a lease on a vacant unit', async 
   assert.equal(result.application.status, 'approved');
   assert.equal(result.person.emailKey, 'jordan@example.com');
   assert.equal(result.lease.unitId, 'unit-124-w-cherokee-a');
+  assert.equal(result.lease.terms.petCount, 0);
+  assert.equal(result.lease.terms.maxOccupants, 2);
   await assert.rejects(
     () =>
       store.createLease({
@@ -44,4 +46,21 @@ test('approve application creates a person and a lease on a vacant unit', async 
       }),
     /already has an active lease/,
   );
+});
+
+test('updateLease merges pet terms without dropping occupants', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan Tenant', email: 'jordan@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-11-noble',
+    personId: person.id,
+    startDate: '2026-09-01',
+    endDate: '2027-08-31',
+    rentCents: 90000,
+    terms: { tenantNames: 'Jordan Tenant', authorizedOccupants: 'Jordan Tenant', petCount: 0 },
+  });
+  const updated = await store.updateLease(lease.id, { terms: { petCount: 1, approvedPets: 'One cat' } });
+  assert.equal(updated.terms.petCount, 1);
+  assert.equal(updated.terms.approvedPets, 'One cat');
+  assert.deepEqual(updated.terms.tenantNames, ['Jordan Tenant']);
 });

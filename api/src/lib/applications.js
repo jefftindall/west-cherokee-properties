@@ -46,6 +46,16 @@ export async function approveApplication(store, applicationId, { unitId, startDa
     endDate,
     rentCents,
     status: 'active',
+    tenantNames: application.fullName,
+    terms: {
+      tenantNames: application.fullName,
+      authorizedOccupants: application.fullName,
+      maxOccupants: application.householdSize,
+      securityDepositCents: rentCents,
+      petCount: 0,
+      approvedPets: 'None',
+      effectiveDate: startDate,
+    },
   });
   const updated = await store.updateApplicationStatus(applicationId, 'approved', { personId: person.id });
   return { application: updated, person, lease };

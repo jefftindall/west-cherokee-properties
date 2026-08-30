@@ -1,6 +1,6 @@
 # Phased delivery
 
-_Last updated: 2026-08-29. Public site closed applications while all units are leased. Waitlist is backlog ([waitlist.md](./waitlist.md))._
+_Last updated: 2026-08-29. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned._
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -11,6 +11,7 @@ _Last updated: 2026-08-29. Public site closed applications while all units are l
 | 5 Operational data | done | Azure SQL schema + memory store for tests |
 | 6 Rental applications | done | Public apply + office queue. Form and API accept applications only when a unit is `available` |
 | Waitlist | planned | Per-property interest list while homes are leased — [waitlist.md](./waitlist.md) |
+| Lease documents | in_progress | Prepare + download exist. In-app eSign (not a vendor): third-party login plus emailed code; each adult signs — [lease-esign.md](./lease-esign.md) |
 | 7 Renters and leases | done | One active lease per unit; portal read |
 | 8 Invoices, payments, receipts | done | Stripe Invoice + webhook; feature flag |
 | 9 Service requests | done | Portal create; office triage |

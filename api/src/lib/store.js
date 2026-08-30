@@ -83,6 +83,20 @@ export function createMemoryStore() {
       db.leases.push(row);
       return clone(row);
     },
+    async updateLease(id, patch) {
+      const row = db.leases.find((l) => l.id === id);
+      if (!row) throw new NotFoundError('Lease not found.');
+      Object.assign(
+        row,
+        normalizeLease({
+          ...row,
+          ...patch,
+          id,
+          terms: { ...row.terms, ...patch.terms },
+        }),
+      );
+      return clone(row);
+    },
     listLeases: async () => clone(db.leases),
     getLease: async (id) => clone(db.leases.find((l) => l.id === id) || null),
     getActiveLeaseForUnit: async (unitId) =>

@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import OfficeNav from '../../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Lease document" description="Print or download this lease" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-4xl px-4 py-10">
+    <p class="text-sm"><a class="btn-ghost" href="/office/leases">Back to leases</a></p>
+    <h1 class="font-display mt-4 text-4xl text-pine">Lease document</h1>
+    <p class="no-print mt-2 text-muted">Print this page and sign in person. The renter can download the same copy from the portal.</p>
+    <p id="lease-actions" class="no-print mt-4 flex flex-wrap gap-3"></p>
+    <p id="lease-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
+    <iframe id="lease-frame" title="Lease document" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
+  </section>
+  <script>
+    const id = window.location.pathname.split('/').filter(Boolean).pop();
+    const actions = document.getElementById('lease-actions');
+    const status = document.getElementById('lease-status');
+    const frame = document.getElementById('lease-frame') as HTMLIFrameElement | null;
+    if (actions && id) {
+      actions.innerHTML = `
+        <button class="btn-primary" type="button" id="print-lease">Print</button>
+        <a class="btn-secondary" href="/api/office/leases/${id}/document?download=1">Download</a>
+        <a class="btn-ghost" href="/api/office/leases/${id}/document" target="_blank" rel="noreferrer">Open in new tab</a>
+      `;
+      document.getElementById('print-lease')?.addEventListener('click', () => frame?.contentWindow?.print());
+    }
+    if (id && frame) {
+      frame.src = `/api/office/leases/${id}/document`;
+      frame.addEventListener('load', () => {
+        if (status) status.textContent = 'Ready to print or download.';
+      });
+    }
+  </script>
+</BaseLayout>

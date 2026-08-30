@@ -1,3 +1,5 @@
+import { defaultTermsForUnit, normalizeLeaseTerms } from './leaseTerms.js';
+
 export function normalizeLease(input) {
   const unitId = String(input.unitId || '').trim();
   const personId = String(input.personId || '').trim();
@@ -19,6 +21,9 @@ export function normalizeLease(input) {
     err.name = 'ValidationError';
     throw err;
   }
+  const terms = input.terms
+    ? normalizeLeaseTerms(input.terms)
+    : defaultTermsForUnit(unitId, { rentCents, startDate, tenantNames: input.tenantNames });
   return {
     id: input.id,
     unitId,
@@ -27,6 +32,7 @@ export function normalizeLease(input) {
     endDate,
     rentCents,
     status: input.status || 'active',
+    terms,
   };
 }
 
