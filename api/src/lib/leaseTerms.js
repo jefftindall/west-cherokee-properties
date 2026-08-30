@@ -207,6 +207,8 @@ export function defaultTermsForUnit(unitId, extras = {}) {
   return normalizeLeaseTerms({
     tenantNames: extras.tenantNames || extras.displayName || '',
     authorizedOccupants: extras.authorizedOccupants || extras.displayName || '',
+    coTenants: extras.coTenants,
+    additionalOccupants: extras.additionalOccupants,
     maxOccupants: extras.maxOccupants || unit.maxOccupants || 2,
     securityDepositCents: extras.securityDepositCents || extras.rentCents,
     petCount: extras.petCount ?? 0,
