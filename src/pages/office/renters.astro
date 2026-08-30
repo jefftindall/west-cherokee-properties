@@ -7,33 +7,132 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Renters</h1>
-    <div id="renters-errors" class="mt-4"></div>
+    <p class="mt-2 text-muted">
+      Add current renters before creating leases, or enter them when you prepare a lease. Each person needs a unique email for portal access.
+    </p>
+    <form id="renter-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <input type="hidden" id="personId" name="personId" value="" />
+      <div>
+        <label for="displayName">Full name</label>
+        <input id="displayName" name="displayName" required maxlength="200" autocomplete="name" />
+      </div>
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required autocomplete="email" />
+      </div>
+      <div>
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
+      </div>
+      <div class="flex flex-wrap items-end gap-3">
+        <button class="btn-primary" type="submit" id="save-btn">Add renter</button>
+        <button class="btn-ghost hidden" type="button" id="cancel-btn">Cancel edit</button>
+      </div>
+    </form>
+    <p id="renter-status" class="mt-2 text-sm text-muted" role="status"></p>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
-    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    type Person = { id: string; displayName: string; email: string; phone?: string };
 
     const root = document.getElementById('list');
-    const errors = document.getElementById('renters-errors');
+    const status = document.getElementById('renter-status');
+    const form = document.getElementById('renter-form') as HTMLFormElement | null;
+    const personIdInput = document.getElementById('personId') as HTMLInputElement | null;
+    const saveBtn = document.getElementById('save-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
 
-    renderLoading(root, 'Loading renters…', { block: true });
-    fetch('/api/office/people')
-      .then(async (res) => {
-        const json = await res.json().catch(() => ({}));
-        clearLoading(root);
-        if (!root) return;
-        if (!res.ok) {
-          showErrorBanner(errors, json.error || 'Could not load renters.');
-          return;
-        }
-        const rows = json.people || [];
-        root.innerHTML = rows.length
-          ? `<ul class="space-y-2">${rows.map((p: { displayName: string; email: string }) => `<li>${p.displayName} · ${p.email}</li>`).join('')}</ul>`
-          : 'No renters yet.';
-      })
-      .catch(() => {
-        clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+    function resetForm() {
+      form?.reset();
+      if (personIdInput) personIdInput.value = '';
+      if (saveBtn) saveBtn.textContent = 'Add renter';
+      cancelBtn?.classList.add('hidden');
+      if (status) status.textContent = '';
+    }
+
+    function startEdit(person: Person) {
+      if (personIdInput) personIdInput.value = person.id;
+      (document.getElementById('displayName') as HTMLInputElement).value = person.displayName;
+      (document.getElementById('email') as HTMLInputElement).value = person.email;
+      (document.getElementById('phone') as HTMLInputElement).value = person.phone || '';
+      if (saveBtn) saveBtn.textContent = 'Save changes';
+      cancelBtn?.classList.remove('hidden');
+      if (status) status.textContent = `Editing ${person.displayName}.`;
+      form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function load() {
+      const res = await fetch('/api/office/people');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load renters.';
+        return;
+      }
+      const rows: Person[] = json.people || [];
+      root.innerHTML = rows.length
+        ? `<table class="w-full border-collapse"><thead><tr>
+            <th class="border-b border-line py-2 text-left">Name</th>
+            <th class="border-b border-line py-2 text-left">Email</th>
+            <th class="border-b border-line py-2 text-left">Phone</th>
+            <th class="border-b border-line py-2 text-left"></th>
+          </tr></thead><tbody>${rows
+            .map(
+              (p) => `<tr>
+                <td class="py-2">${p.displayName}</td>
+                <td>${p.email}</td>
+                <td>${p.phone || '—'}</td>
+                <td class="py-2">
+                  <button type="button" class="btn-ghost px-2 py-1 text-xs" data-edit="${p.id}">Edit</button>
+                  <a class="btn-ghost px-2 py-1 text-xs" href="/office/leases?personId=${encodeURIComponent(p.id)}">Create lease</a>
+                </td>
+              </tr>`,
+            )
+            .join('')}</tbody></table>`
+        : 'No renters yet. Add your first renter above.';
+      const byId = new Map(rows.map((p) => [p.id, p]));
+      root.querySelectorAll('button[data-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = (btn as HTMLButtonElement).dataset.edit;
+          const person = id ? byId.get(id) : null;
+          if (person) startEdit(person);
+        });
       });
+    }
+
+    cancelBtn?.addEventListener('click', resetForm);
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const editingId = String(data.get('personId') || '').trim();
+      const payload = {
+        displayName: data.get('displayName'),
+        email: data.get('email'),
+        phone: data.get('phone') || '',
+      };
+      if (status) status.textContent = 'Saving…';
+      const res = await fetch(editingId ? `/api/office/people/${editingId}` : '/api/office/people', {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) {
+        status.textContent = res.ok
+          ? editingId
+            ? 'Renter updated.'
+            : 'Renter added.'
+          : json.error || 'Could not save renter.';
+      }
+      if (res.ok) {
+        resetForm();
+        load();
+      }
+    });
+
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
   </script>
 </BaseLayout>

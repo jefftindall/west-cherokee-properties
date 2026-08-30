@@ -64,3 +64,22 @@ test('updateLease merges pet terms without dropping occupants', async () => {
   assert.equal(updated.terms.approvedPets, 'One cat');
   assert.deepEqual(updated.terms.tenantNames, ['Jordan Tenant']);
 });
+
+test('updatePerson changes display name and phone', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan Tenant', email: 'jordan@example.com', phone: '4045550100' });
+  const updated = await store.updatePerson(person.id, { displayName: 'Jordan T.', phone: '4045550199' });
+  assert.equal(updated.displayName, 'Jordan T.');
+  assert.equal(updated.phone, '4045550199');
+  assert.equal(updated.emailKey, 'jordan@example.com');
+});
+
+test('updatePerson rejects duplicate email', async () => {
+  const store = createMemoryStore();
+  const jordan = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  await store.upsertPerson({ displayName: 'Riley', email: 'riley@example.com' });
+  await assert.rejects(
+    () => store.updatePerson(jordan.id, { email: 'riley@example.com' }),
+    /already uses that email/,
+  );
+});
