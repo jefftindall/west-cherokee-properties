@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { newCorrelationId } from '../lib/auth.js';
 import { failureResponse, htmlOk, jsonOk } from '../lib/httpErrors.js';
 import { buildLeaseDocument } from '../lib/leaseDocument.js';
+import { buildLegalDocument } from '../lib/legalDocuments.js';
 import { defaultTermsForUnit, monthlyChargeCents, UNIT_LEASE_DEFAULTS } from '../lib/leaseTerms.js';
 import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
@@ -335,6 +336,34 @@ app.http('officeLeaseDocument', {
     const person = await store.getPerson(lease.personId);
     const document = buildLeaseDocument({ lease, person });
     const download = new URL(request.url).searchParams.get('download') === '1';
+    return htmlOk(document.html, { filename: document.filename, download });
+  }),
+});
+
+app.http('officeLegalDocument', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/leases/{id}/legal/{type}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.LEASES_READ);
+    const store = getStore();
+    const lease = await store.getLease(request.params.id);
+    if (!lease) {
+      const err = new Error('Lease not found.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const person = await store.getPerson(lease.personId);
+    const invoices = await store.listInvoices();
+    const searchParams = new URL(request.url).searchParams;
+    const document = buildLegalDocument({
+      type: request.params.type,
+      lease,
+      person,
+      invoices,
+      searchParams,
+    });
+    const download = searchParams.get('download') === '1';
     return htmlOk(document.html, { filename: document.filename, download });
   }),
 });

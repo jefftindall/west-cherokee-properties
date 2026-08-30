@@ -1,3 +1,20 @@
+# Legal templates
+
+**Audience:** Staff preparing leases and legal notices in `/office`; renters downloading leases from `/portal`  
+**Last updated:** 2026-08-30  
+
+## Documents
+
+| Document | Template | Office route |
+|----------|----------|--------------|
+| Georgia residential lease | [georgia-residential-lease-template.md](./georgia-residential-lease-template.md) | `/office/leases/{id}` |
+| Notice to pay rent or quit (7-day) | [georgia-eviction-notice-template.md](./georgia-eviction-notice-template.md) | `/office/legal-document?leaseId=&type=eviction-notice` |
+| Affidavit of service (personal) | [georgia-affidavit-of-service-template.md](./georgia-affidavit-of-service-template.md) | `/office/legal-document?leaseId=&type=affidavit-of-service` |
+
+Implementation plan: [legal-documents.md](../plans/legal-documents.md).
+
+---
+
 # Lease template
 
 **Audience:** Staff preparing a lease in `/office`; renters downloading from `/portal`  
@@ -165,3 +182,30 @@ The source PDFs are the same Georgia residential form. Dollar amounts, grace per
 ## Do not put in git
 
 Executed PDFs, tenant names, emails, phones, or filled dollar amounts for a live tenancy. Rotate any secret that lands in chat or CI per [rotate-secrets.md](../runbooks/rotate-secrets.md).
+
+## Eviction notice merge fields
+
+| Field | Required | Notes |
+|-------|----------|--------|
+| `{{notice_date}}` | yes | Date notice is issued |
+| `{{tenant_name}}` | yes | Primary tenant from lease household |
+| `{{tenant_mailing_address}}` | yes | Premises address (unit default) |
+| `{{premises_address}}` | yes | Full street, city, state, ZIP |
+| `{{lease_date}}` | yes | Lease commencement |
+| `{{amount_due}}` | yes | Defaults to open invoice balance |
+| `{{period_start}}` / `{{period_end}}` | yes | Unpaid rent period; blank underscores if unknown |
+| `{{possession_deliver_to}}` | yes | Landlord or agent; blank underscore if unset |
+| `{{landlord_signer_name}}` | wet-ink | Authorized signer |
+| `{{landlord_name}}` / `{{landlord_address}}` | yes | West Cherokee defaults |
+
+## Affidavit of service merge fields
+
+| Field | Required | Notes |
+|-------|----------|--------|
+| `{{server_name}}` | yes | Disinterested third party (not landlord employee related to tenant) |
+| `{{service_date}}` | yes | Date of personal delivery |
+| `{{document_served}}` | yes | Usually `NOTICE TO PAY RENT OR QUIT` |
+| `{{recipient_name}}` / `{{recipient_address}}` | yes | Tenant name and premises (uppercase in output) |
+| `{{affidavit_sign_day}}` / `_month` / `_year` | wet-ink | Server signature date |
+| `{{service_city}}` / `{{service_state}}` | yes | Cartersville, Georgia |
+| Notary block fields | wet-ink | County, date, notary name, title, commission expiry |

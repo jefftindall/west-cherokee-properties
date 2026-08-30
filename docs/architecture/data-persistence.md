@@ -62,6 +62,7 @@ Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemor
 - Office APIs require catalog permissions.
 - Portal APIs match `people.email_key` to the signed-in email and never return other households' rows. `GET /api/portal/lease/document` is the renter's current filled lease only.
 - Office `GET /api/office/leases/{id}/document` is the same HTML for print / in-person signing. In-app eSign (Entra login plus a code emailed to the address on file; one signature per adult party) is planned — [lease-esign.md](../plans/lease-esign.md). Do not add a third-party envelope vendor.
+- Office `GET /api/office/leases/{id}/legal/{type}` generates HTML for `eviction-notice` or `affidavit-of-service` (query params override dates, amount due, server name). Staff preview at `/office/legal-document?leaseId=&type=`. Not persisted in SQL yet — [legal-documents.md](../plans/legal-documents.md).
 - Stripe webhook verifies the signature, then updates the matching invoice by `stripe_invoice_id`.
 - Office `POST /api/office/payments` records manual rent (cash, check, Zelle, etc.) against an existing invoice or a lease + month (back payments within the lease term). When a Stripe invoice exists for that row, the API marks it paid out-of-band in Stripe.
 - Office `GET /api/office/dashboard` includes `rentRoll` (expected vs collected for the current and next calendar month in America/New_York).

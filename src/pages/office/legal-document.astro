@@ -1,0 +1,148 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+
+const docTypes = {
+  'eviction-notice': {
+    title: 'Eviction notice',
+    description: 'Seven-day notice to pay rent or quit',
+    apiType: 'eviction-notice',
+  },
+  'affidavit-of-service': {
+    title: 'Affidavit of service',
+    description: 'Personal service affidavit for a served notice',
+    apiType: 'affidavit-of-service',
+  },
+};
+---
+
+<BaseLayout title="Legal document" description="Print or download a legal notice" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-4xl px-4 py-10">
+    <p class="text-sm"><a class="btn-ghost" href="/office/leases">Back to leases</a></p>
+    <h1 class="font-display mt-4 text-4xl text-pine" id="doc-title">Legal document</h1>
+    <p class="no-print mt-2 text-muted" id="doc-description">Print this page and sign in person.</p>
+    <div id="legal-errors" class="no-print mt-4"></div>
+    <form id="legal-options" class="no-print mt-6 grid gap-4 rounded-lg border border-line bg-panel p-4 md:grid-cols-2"></form>
+    <p id="legal-actions" class="no-print mt-4 flex flex-wrap gap-3"></p>
+    <p id="legal-status" class="mt-3 text-sm text-muted" role="status"></p>
+    <div id="legal-loading" class="no-print mt-6"></div>
+    <iframe id="legal-frame" title="Legal document" class="mt-6 hidden min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
+  </section>
+  <script define:vars={{ docTypes }}>
+    import { renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
+    async function ensureOfficeAuth() {
+      const res = await fetch('/api/office/health');
+      if (res.ok) return true;
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?returnUrl=${returnUrl}`;
+      return false;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const leaseId = params.get('leaseId');
+    const typeKey = params.get('type') || 'eviction-notice';
+    const docMeta = docTypes[typeKey];
+    const optionsForm = document.getElementById('legal-options');
+    const actions = document.getElementById('legal-actions');
+    const status = document.getElementById('legal-status');
+    const errors = document.getElementById('legal-errors');
+    const loadingHost = document.getElementById('legal-loading');
+    const frame = document.getElementById('legal-frame');
+    const titleEl = document.getElementById('doc-title');
+    const descEl = document.getElementById('doc-description');
+
+    function todayIso() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function buildQuery() {
+      const data = new FormData(optionsForm);
+      const query = new URLSearchParams();
+      for (const [key, value] of data.entries()) {
+        const text = String(value || '').trim();
+        if (text) query.set(key, text);
+      }
+      return query;
+    }
+
+    function documentUrl(download = false) {
+      const query = buildQuery();
+      if (download) query.set('download', '1');
+      const qs = query.toString();
+      return `/api/office/leases/${leaseId}/legal/${docMeta.apiType}${qs ? `?${qs}` : ''}`;
+    }
+
+    function reloadFrame() {
+      if (!frame || !leaseId || !docMeta) return;
+      renderLoading(loadingHost, 'Loading document…', { block: true });
+      frame.src = documentUrl();
+    }
+
+    if (!leaseId || !docMeta) {
+      showErrorBanner(errors, 'Missing leaseId or document type in URL.');
+    } else {
+      if (titleEl) titleEl.textContent = docMeta.title;
+      if (descEl) descEl.textContent = docMeta.description;
+
+      if (optionsForm) {
+        if (typeKey === 'eviction-notice') {
+          optionsForm.innerHTML = `
+            <label class="block text-sm">Notice date<input class="mt-1 w-full rounded border border-line px-2 py-1" type="date" name="noticeDate" value="${todayIso()}" /></label>
+            <label class="block text-sm">Amount due (cents)<input class="mt-1 w-full rounded border border-line px-2 py-1" type="number" name="amountDueCents" min="1" step="1" placeholder="Open balance if blank" /></label>
+            <label class="block text-sm">Period start<input class="mt-1 w-full rounded border border-line px-2 py-1" type="date" name="periodStart" /></label>
+            <label class="block text-sm">Period end<input class="mt-1 w-full rounded border border-line px-2 py-1" type="date" name="periodEnd" /></label>
+            <label class="block text-sm md:col-span-2">Deliver possession to<input class="mt-1 w-full rounded border border-line px-2 py-1" type="text" name="possessionDeliverTo" placeholder="Landlord or agent name" /></label>
+          `;
+        } else {
+          optionsForm.innerHTML = `
+            <label class="block text-sm">Service date<input class="mt-1 w-full rounded border border-line px-2 py-1" type="date" name="serviceDate" value="${todayIso()}" /></label>
+            <label class="block text-sm md:col-span-2">Server name<input class="mt-1 w-full rounded border border-line px-2 py-1" type="text" name="serverName" placeholder="Disinterested third party" /></label>
+            <label class="block text-sm md:col-span-2">Document served<input class="mt-1 w-full rounded border border-line px-2 py-1" type="text" name="documentServed" value="NOTICE TO PAY RENT OR QUIT" /></label>
+            <label class="block text-sm">Notary county<input class="mt-1 w-full rounded border border-line px-2 py-1" type="text" name="notaryCounty" placeholder="Bartow" /></label>
+          `;
+        }
+        optionsForm.addEventListener('change', reloadFrame);
+        optionsForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          reloadFrame();
+        });
+      }
+
+      if (actions) {
+        actions.innerHTML = `
+          <button class="btn-primary" type="button" id="print-legal">Print</button>
+          <a class="btn-secondary" id="download-legal" href="#">Download</a>
+          <a class="btn-ghost" id="open-legal" href="#" target="_blank" rel="noreferrer">Open in new tab</a>
+          <button class="btn-ghost" type="submit" form="legal-options">Refresh preview</button>
+        `;
+        document.getElementById('print-legal')?.addEventListener('click', () => frame?.contentWindow?.print());
+        const downloadLink = document.getElementById('download-legal');
+        const openLink = document.getElementById('open-legal');
+        const syncLinks = () => {
+          const url = documentUrl();
+          const downloadUrl = documentUrl(true);
+          if (downloadLink) downloadLink.href = downloadUrl;
+          if (openLink) openLink.href = url;
+        };
+        syncLinks();
+        optionsForm?.addEventListener('change', syncLinks);
+      }
+
+      ensureOfficeAuth().then((authed) => {
+        if (!authed || !frame) return;
+        frame.classList.remove('hidden');
+        frame.addEventListener('load', () => {
+          if (loadingHost) loadingHost.innerHTML = '';
+          if (status) status.textContent = 'Ready to print or download.';
+        });
+        frame.addEventListener('error', () => {
+          if (loadingHost) loadingHost.innerHTML = '';
+          showErrorBanner(errors, 'Could not load legal document.');
+        });
+        reloadFrame();
+      });
+    }
+  </script>
+</BaseLayout>
