@@ -38,6 +38,11 @@ export async function markInvoicePaid(store, invoice, paymentInput) {
     stripeEventId: paymentInput.stripeEventId || '',
     stripePaymentIntentId: paymentInput.stripePaymentIntentId || '',
     receiptUrl: paymentInput.receiptUrl || '',
+    source: paymentInput.source || 'stripe',
+    method: paymentInput.method || '',
+    notes: paymentInput.notes || '',
+    recordedBy: paymentInput.recordedBy || '',
+    createdAt: paymentInput.createdAt,
   });
   const updated = await store.updateInvoice(invoice.id, {
     status: 'paid',

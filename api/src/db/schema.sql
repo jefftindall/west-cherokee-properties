@@ -129,8 +129,32 @@ BEGIN
     stripe_event_id NVARCHAR(64) NULL,
     stripe_payment_intent_id NVARCHAR(64) NULL,
     receipt_url NVARCHAR(500) NULL,
+    source NVARCHAR(32) NOT NULL CONSTRAINT df_payments_source DEFAULT 'stripe',
+    method NVARCHAR(32) NULL,
+    notes NVARCHAR(500) NULL,
+    recorded_by NVARCHAR(320) NULL,
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   );
+END;
+
+IF COL_LENGTH('dbo.payments', 'source') IS NULL
+BEGIN
+  ALTER TABLE dbo.payments ADD source NVARCHAR(32) NOT NULL CONSTRAINT df_payments_source DEFAULT 'stripe';
+END;
+
+IF COL_LENGTH('dbo.payments', 'method') IS NULL
+BEGIN
+  ALTER TABLE dbo.payments ADD method NVARCHAR(32) NULL;
+END;
+
+IF COL_LENGTH('dbo.payments', 'notes') IS NULL
+BEGIN
+  ALTER TABLE dbo.payments ADD notes NVARCHAR(500) NULL;
+END;
+
+IF COL_LENGTH('dbo.payments', 'recorded_by') IS NULL
+BEGIN
+  ALTER TABLE dbo.payments ADD recorded_by NVARCHAR(320) NULL;
 END;
 
 IF OBJECT_ID('dbo.service_requests', 'U') IS NULL

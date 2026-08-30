@@ -160,6 +160,10 @@ export function createMemoryStore() {
         stripeEventId: input.stripeEventId || '',
         stripePaymentIntentId: input.stripePaymentIntentId || '',
         receiptUrl: input.receiptUrl || '',
+        source: input.source || 'stripe',
+        method: input.method || '',
+        notes: input.notes || '',
+        recordedBy: input.recordedBy || '',
         createdAt: input.createdAt || new Date().toISOString(),
       };
       if (payment.stripeEventId && db.payments.some((p) => p.stripeEventId === payment.stripeEventId)) {

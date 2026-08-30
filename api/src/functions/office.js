@@ -9,12 +9,18 @@ import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
 import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.js';
 import { getStore } from '../lib/store.js';
-import { buildDashboard } from '../lib/unitHealth.js';
+import { buildDashboard, buildRentRoll } from '../lib/unitHealth.js';
 import {
   createStripeInvoiceForRow,
   rentPaymentsEnabled,
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
+import {
+  defaultPeriodForMonthInput,
+  MANUAL_PAYMENT_METHODS,
+  recordLeasePeriodPayment,
+  recordManualPayment,
+} from '../lib/payments.js';
 
 const additionalOccupantSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -87,7 +93,10 @@ app.http('officeDashboard', {
       store.listPeople(),
       store.listInvoices(),
     ]);
-    return jsonOk(buildDashboard({ properties, units, leases, people, invoices }));
+    return jsonOk({
+      ...buildDashboard({ properties, units, leases, people, invoices }),
+      rentRoll: buildRentRoll({ leases, invoices }),
+    });
   }),
 });
 
@@ -327,6 +336,102 @@ app.http('officeLeaseDocument', {
     const document = buildLeaseDocument({ lease, person });
     const download = new URL(request.url).searchParams.get('download') === '1';
     return htmlOk(document.html, { filename: document.filename, download });
+  }),
+});
+
+app.http('officePaymentsGet', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/payments',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.INVOICES_READ);
+    const store = getStore();
+    const [payments, invoices, leases, people, units] = await Promise.all([
+      store.listPayments(),
+      store.listInvoices(),
+      store.listLeases(),
+      store.listPeople(),
+      store.listUnits(),
+    ]);
+    const invoiceById = new Map(invoices.map((row) => [row.id, row]));
+    const leaseById = new Map(leases.map((row) => [row.id, row]));
+    const personById = new Map(people.map((row) => [row.id, row]));
+    const unitById = new Map(units.map((row) => [row.id, row]));
+    const rows = payments
+      .map((payment) => {
+        const invoice = invoiceById.get(payment.invoiceId) || null;
+        const lease = invoice ? leaseById.get(invoice.leaseId) || null : null;
+        const person = lease ? personById.get(lease.personId) || null : null;
+        const unit = lease ? unitById.get(lease.unitId) || null : null;
+        return { payment, invoice, lease, person, unit };
+      })
+      .sort((a, b) => String(b.payment.createdAt).localeCompare(String(a.payment.createdAt)));
+    return jsonOk({ payments: rows });
+  }),
+});
+
+app.http('officePaymentsPost', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'office/payments',
+  handler: wrap(async (request) => {
+    const caller = await permissionGate(request, PERMISSION.INVOICES_WRITE);
+    const body = z
+      .object({
+        invoiceId: z.string().min(1).optional(),
+        leaseId: z.string().min(1).optional(),
+        month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+        periodStart: z.string().min(8).optional(),
+        periodEnd: z.string().min(8).optional(),
+        method: z.enum(MANUAL_PAYMENT_METHODS),
+        notes: z.string().trim().max(500).optional(),
+        amountCents: z.number().int().positive().optional(),
+        paidAt: z.string().min(8).optional(),
+      })
+      .refine((value) => Boolean(value.invoiceId || value.leaseId), {
+        message: 'invoiceId or leaseId is required.',
+      })
+      .parse(await request.json());
+    const store = getStore();
+
+    if (body.invoiceId) {
+      const invoice = await store.getInvoice(body.invoiceId);
+      const result = await recordManualPayment(store, {
+        invoice,
+        amountCents: body.amountCents,
+        method: body.method,
+        notes: body.notes,
+        recordedBy: caller.email,
+        paidAt: body.paidAt,
+      });
+      return jsonOk(result, 201);
+    }
+
+    const lease = await store.getLease(body.leaseId);
+    if (!lease) {
+      const err = new Error('Lease not found.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const period = body.month
+      ? defaultPeriodForMonthInput(body.month)
+      : { periodStart: body.periodStart, periodEnd: body.periodEnd };
+    if (!period.periodStart || !period.periodEnd) {
+      const err = new Error('month or periodStart and periodEnd are required with leaseId.');
+      err.name = 'ValidationError';
+      throw err;
+    }
+    const result = await recordLeasePeriodPayment(store, {
+      lease,
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      method: body.method,
+      notes: body.notes,
+      recordedBy: caller.email,
+      paidAt: body.paidAt,
+      amountCents: body.amountCents,
+    });
+    return jsonOk(result, 201);
   }),
 });
 

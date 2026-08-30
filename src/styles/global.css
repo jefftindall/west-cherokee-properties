@@ -189,6 +189,20 @@ body {
   background: rgb(0 0 0 / 0.06);
 }
 
+.wcp-progress {
+  height: 0.75rem;
+  border-radius: 9999px;
+  background: var(--color-line);
+  overflow: hidden;
+}
+
+.wcp-progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-leaf);
+  transition: width 0.3s ease;
+}
+
 input,
 select,
 textarea {

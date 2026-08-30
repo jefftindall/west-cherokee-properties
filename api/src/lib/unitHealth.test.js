@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildDashboard,
+  buildRentRoll,
   computeUnitHealth,
   currentMonthPeriod,
   invoicesForCurrentMonth,
@@ -145,4 +146,29 @@ test('buildDashboard groups five units across three properties', () => {
   const occupied = dashboard.properties.flatMap((property) => property.units).find((unit) => unit.health !== 'vacant');
   assert.equal(occupied?.health, 'green');
   assert.equal(dashboard.properties.flatMap((property) => property.units).filter((unit) => unit.health === 'vacant').length, 4);
+});
+
+test('buildRentRoll sums expected and collected rent for current and next month', () => {
+  const active = lease();
+  const invoices = [
+    {
+      leaseId: active.id,
+      periodStart: '2026-08-01',
+      periodEnd: '2026-08-31',
+      amountCents: 145000,
+      status: 'paid',
+    },
+  ];
+  const roll = buildRentRoll({
+    leases: [active],
+    invoices,
+    now: AUG_2_2026_NY,
+  });
+  assert.equal(roll.currentMonth.expectedCents, 145000);
+  assert.equal(roll.currentMonth.collectedCents, 145000);
+  assert.equal(roll.currentMonth.progressPercent, 100);
+  assert.equal(roll.currentMonth.label, 'August 2026');
+  assert.equal(roll.nextMonth.expectedCents, 145000);
+  assert.equal(roll.nextMonth.collectedCents, 0);
+  assert.equal(roll.nextMonth.progressPercent, 0);
 });
