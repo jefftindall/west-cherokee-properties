@@ -10,7 +10,7 @@ variable "location" {
 variable "sql_location" {
   type        = string
   default     = ""
-  description = "Azure SQL region. Defaults to location. Some new subscriptions block SQL in East US 2."
+  description = "Azure SQL region. Defaults to location. This subscription blocks new SQL servers in East US and East US 2 (ProvisioningDisabled); Central US is allowed."
 }
 
 variable "create_sql" {

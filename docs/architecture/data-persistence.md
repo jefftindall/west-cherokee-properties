@@ -6,7 +6,7 @@
 
 There is **one application database**: Azure SQL (`wcp`). Git holds public brand copy only. Stripe is the money system of record.
 
-Staging and prod have `create_sql = false` because this subscription cannot provision Azure SQL in East US 2 or East US (`ProvisioningDisabled`). `SQL-CONNECTION-STRING` in the env Key Vaults is empty; the Functions API falls back to the in-memory store. Re-enable with `create_sql = true` (and a region Azure allows) when the quota exception lands.
+Azure SQL lives in **Central US** (`sql_location = centralus`). East US and East US 2 return `ProvisioningDisabled` for new SQL servers on this subscription; SWA, Key Vault, and the rest of each env stay in East US 2. Move SQL back with `sql_location` when a region-access exception lands.
 
 ## Systems of record
 
@@ -53,7 +53,7 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 | `service_requests` | Scoped to `person_id` |
 | `office_users` | Workforce identities + roles JSON |
 
-Local/dev and staging (while `create_sql` is false) without `SQL_CONNECTION_STRING` use the in-memory store (`createMemoryStore`) so tests, `func start`, and the public site work offline. In-memory data is not durable across Function restarts.
+Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemoryStore`) so tests and `func start` work offline. In-memory data is not durable across Function restarts.
 
 ## Access paths
 

@@ -5,6 +5,7 @@ resource "random_password" "sql" {
   override_special = "!@#%^*-_=+"
 }
 
+# Logical server can sit in a different region than the RG (East US 2).
 resource "azurerm_mssql_server" "ops" {
   count                        = var.create_sql ? 1 : 0
   name                         = local.sql_name

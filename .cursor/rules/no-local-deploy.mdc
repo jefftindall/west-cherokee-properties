@@ -1,0 +1,30 @@
+---
+description: Never deploy or apply Terraform locally unless the user explicitly asks
+alwaysApply: true
+---
+
+# No local deploys
+
+Ship through a pull request. Automation deploys after merge.
+
+- Site: [`CD: main`](../../.github/workflows/cd-main.yml)
+- Terraform staging/prod: CI **plans** on the PR; [`CD: terraform`](../../.github/workflows/cd-terraform.yml) **applies** after merge to `main`
+- Bootstrap stays local-state and human-only (see [setup.md](../../docs/setup.md))
+
+## Do not run unless the user explicitly asks in this conversation
+
+- `terraform apply` / `terraform apply tfplan`
+- `az staticwebapp` deploy, `Azure/static-web-apps-deploy`, `func azure functionapp publish`
+- `gh workflow run` for `CD: main` or `CD: terraform`
+- Mutating `az` that creates or updates env resources (`az sql`, `az group create`, Key Vault secret writes, SWA app settings)
+
+## Allowed without extra permission
+
+- `terraform fmt` / `validate` / `plan` (never apply)
+- Read-only `az` (`account show`, `group list`, `resource list`)
+- Local `npm run lint`, tests, `astro` / `func start`
+- `git commit` / `gh pr create` when the user asked for a commit or PR
+
+If the user says “put it in Azure” or “create the database”, still open a PR. Do not apply. Tell them merge runs `CD: terraform` and `CD: main`.
+
+Exception: only when they clearly say to apply or deploy **locally / now / from this machine**.

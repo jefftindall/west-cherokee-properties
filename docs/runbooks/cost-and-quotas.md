@@ -1,7 +1,7 @@
 # Runbook: Cost and quotas
 
 **Last updated:** 2026-08-29  
-**Region:** East US 2  
+**Region:** East US 2 (Azure SQL in Central US)  
 **Subscription:** `5f82b068-cbaa-40bf-9d56-e9932a64a41c`  
 **Budget:** `budget-wcp-monthly` ($50/mo, 80% and 100% Actual). Alert email from `kv-wcp-shared` / `ALERT-EMAIL`.
 
@@ -10,7 +10,7 @@ Expected retail (order-of-magnitude, two environments):
 | Item | Notes | USD / mo |
 |------|-------|----------|
 | SWA Standard × 2 | `swa-wcp-staging`, `swa-wcp-prod` | ~18 |
-| Azure SQL serverless GP_S_Gen5_1 × 2 | `sql-wcp-staging`, `sql-wcp-prod`; auto-pause 60m, min 0.5 vCore. Neither is created yet (`create_sql = false`; subscription `ProvisioningDisabled` in East US / East US 2) | ~12–25 when both exist and idle most of the month |
+| Azure SQL serverless GP_S_Gen5_1 × 2 | `sql-wcp-staging`, `sql-wcp-prod` in Central US (East US / East US 2 are `ProvisioningDisabled`); auto-pause 60m, min 0.5 vCore | ~12–25 when idle most of the month |
 | Key Vault × 3 | `kv-wcp-shared`, `kv-wcp-staging`, `kv-wcp-prod` | ~1 |
 | Log Analytics + App Insights × 2 | 1 GB/day cap | ~2 |
 | Budget buffer | — | — |

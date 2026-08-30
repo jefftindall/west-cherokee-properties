@@ -10,12 +10,12 @@ variable "location" {
 
 variable "sql_location" {
   type    = string
-  default = "eastus"
+  default = "centralus"
 }
 
 variable "create_sql" {
   type    = bool
-  default = false
+  default = true
 }
 
 variable "custom_domain" {

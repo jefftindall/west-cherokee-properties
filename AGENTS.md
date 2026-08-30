@@ -4,6 +4,10 @@ See README.md and docs/ for project guidance.
 
 Astro property-management site + Azure Functions API. Node >= 22.12 is required (see root `package.json` engines). Cloud agent runtime is defined in [`.cursor/environment.json`](.cursor/environment.json): the `install` script runs `npm ci` for the root site and `api/`. Bake Node, Terraform (>= 1.5), TFLint (`tflint --init` in `infra/`), and Azure CLI (`az`) into the Cursor Cloud environment **snapshot**. Azure Functions Core Tools (`func`) may be present on the base/snapshot image but is **not** part of `install`. The `site` terminal starts Astro on port 4321.
 
+### No local deploys
+
+**Do not apply Terraform, deploy SWA, or mutate Azure env resources unless the user explicitly asks in that conversation.** Open a PR. After merge, `CD: main` deploys the site and `CD: terraform` applies staging/prod. See [`.cursor/rules/no-local-deploy.mdc`](.cursor/rules/no-local-deploy.mdc).
+
 ### Lint and static analysis (required before commit)
 
 **Agents must run local static analysis before committing or pushing code:**
