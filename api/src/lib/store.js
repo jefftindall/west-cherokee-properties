@@ -5,6 +5,7 @@ import { normalizeInvoice } from './invoices.js';
 import { normalizeServiceRequest } from './serviceRequests.js';
 import { ROLE } from './permissions.js';
 import { ConflictError, NotFoundError, ValidationError } from './errors.js';
+import { resolvePersonContact } from './people.js';
 import { createSqlStore } from './sqlStore.js';
 import { SEEDED_PROPERTIES, SEEDED_UNITS } from './propertySeed.js';
 
@@ -34,23 +35,23 @@ export function createMemoryStore() {
       clone(propertyId ? db.units.filter((u) => u.propertyId === propertyId) : db.units),
     getUnit: async (id) => clone(db.units.find((u) => u.id === id) || null),
 
-    async upsertPerson({ displayName, email, phone = '' }) {
-      const emailKey = String(email || '').trim().toLowerCase();
-      if (!emailKey) throw new ValidationError('email is required');
-      let person = db.people.find((p) => p.emailKey === emailKey);
+    async upsertPerson({ displayName, email = '', phone = '' }) {
+      const contact = resolvePersonContact({ email, phone });
+      let person = db.people.find((p) => p.emailKey === contact.emailKey);
       if (!person) {
         person = {
           id: `person-${randomUUID()}`,
           displayName: String(displayName || '').trim(),
-          email: String(email).trim(),
-          emailKey,
-          phone: String(phone || '').trim(),
+          email: contact.email,
+          emailKey: contact.emailKey,
+          phone: contact.phone,
           stripeCustomerId: '',
         };
         db.people.push(person);
       } else {
         person.displayName = String(displayName || person.displayName).trim();
-        if (phone) person.phone = String(phone).trim();
+        if (contact.email) person.email = contact.email;
+        if (contact.phone) person.phone = contact.phone;
       }
       return clone(person);
     },

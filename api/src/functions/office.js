@@ -7,6 +7,7 @@ import { defaultTermsForUnit, monthlyChargeCents, UNIT_LEASE_DEFAULTS } from '..
 import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
+import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.js';
 import { getStore } from '../lib/store.js';
 import { buildDashboard } from '../lib/unitHealth.js';
 import {
@@ -14,6 +15,38 @@ import {
   rentPaymentsEnabled,
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
+
+const additionalOccupantSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  relationship: z.enum(OCCUPANT_RELATIONSHIPS),
+});
+
+const createPersonSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(200),
+    email: z.string().trim().max(320).optional(),
+    phone: z.string().trim().max(40).optional(),
+  })
+  .refine((value) => Boolean(String(value.email || '').trim() || String(value.phone || '').trim()), {
+    message: 'Email or phone is required.',
+  });
+
+async function createLeaseFromHousehold(store, body) {
+  const { primary, householdTerms } = await resolveLeaseHousehold(store, {
+    personId: body.personId,
+    coTenantPersonIds: body.coTenantPersonIds || [],
+    additionalOccupants: body.additionalOccupants || [],
+  });
+  const terms = defaultTermsForUnit(body.unitId, {
+    ...body.terms,
+    ...householdTerms,
+    rentCents: body.rentCents,
+    startDate: body.startDate,
+    displayName: primary.displayName,
+  });
+  const lease = await store.createLease({ ...body, personId: primary.id, terms });
+  return { lease, person: primary };
+}
 
 // SWA-linked Functions use authLevel 'anonymous' so Easy Auth can inject x-ms-client-principal.
 // Office authorization is enforced in officeCaller / permissionGate, not by the Functions key.
@@ -145,28 +178,16 @@ app.http('officeApplicationPatch', {
 });
 
 app.http('officePeople', {
-  methods: ['GET'],
+  methods: ['GET', 'POST'],
   authLevel: 'anonymous',
   route: 'office/people',
   handler: wrap(async (request) => {
-    await permissionGate(request, PERMISSION.PEOPLE_READ);
-    return jsonOk({ people: await getStore().listPeople() });
-  }),
-});
-
-app.http('officePeoplePost', {
-  methods: ['POST'],
-  authLevel: 'anonymous',
-  route: 'office/people',
-  handler: wrap(async (request) => {
+    if (request.method === 'GET') {
+      await permissionGate(request, PERMISSION.PEOPLE_READ);
+      return jsonOk({ people: await getStore().listPeople() });
+    }
     await permissionGate(request, PERMISSION.PEOPLE_WRITE);
-    const body = z
-      .object({
-        displayName: z.string().trim().min(1).max(200),
-        email: z.email(),
-        phone: z.string().trim().max(40).optional(),
-      })
-      .parse(await request.json());
+    const body = createPersonSchema.parse(await request.json());
     const person = await getStore().upsertPerson(body);
     return jsonOk({ person }, 201);
   }),
@@ -211,13 +232,13 @@ app.http('officeLeasesPost', {
     const body = z
       .object({
         unitId: z.string().min(1),
-        personId: z.string().min(1).optional(),
-        personEmail: z.email().optional(),
-        personName: z.string().trim().max(200).optional(),
+        personId: z.string().min(1),
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
         status: z.enum(['active', 'ended']).optional(),
+        coTenantPersonIds: z.array(z.string().min(1)).max(2).optional(),
+        additionalOccupants: z.array(additionalOccupantSchema).max(10).optional(),
         terms: z
           .object({
             tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
@@ -232,43 +253,9 @@ app.http('officeLeasesPost', {
           })
           .optional(),
       })
-      .refine((data) => data.personId || data.personEmail, {
-        message: 'personId or personEmail is required',
-      })
       .parse(await request.json());
     const store = getStore();
-    const firstTenantName = Array.isArray(body.terms?.tenantNames)
-      ? body.terms.tenantNames[0]
-      : body.terms?.tenantNames;
-    let person;
-    if (body.personId) {
-      person = await store.getPerson(body.personId);
-      if (!person) {
-        const err = new Error('Person not found.');
-        err.name = 'NotFoundError';
-        throw err;
-      }
-    } else {
-      person = await store.upsertPerson({
-        displayName: body.personName || firstTenantName || body.personEmail,
-        email: body.personEmail,
-      });
-    }
-    const terms = defaultTermsForUnit(body.unitId, {
-      ...body.terms,
-      rentCents: body.rentCents,
-      startDate: body.startDate,
-      displayName: person.displayName,
-    });
-    const lease = await store.createLease({
-      unitId: body.unitId,
-      personId: person.id,
-      startDate: body.startDate,
-      endDate: body.endDate,
-      rentCents: body.rentCents,
-      status: body.status,
-      terms,
-    });
+    const { lease } = await createLeaseFromHousehold(store, body);
     return jsonOk({ lease }, 201);
   }),
 });

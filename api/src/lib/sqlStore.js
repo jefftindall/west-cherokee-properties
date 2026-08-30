@@ -10,6 +10,7 @@ import { normalizeInvoice } from './invoices.js';
 import { normalizeServiceRequest } from './serviceRequests.js';
 import { ROLE } from './permissions.js';
 import { SEEDED_PROPERTIES, SEEDED_UNITS } from './propertySeed.js';
+import { resolvePersonContact } from './people.js';
 
 const schemaPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../db/schema.sql');
 
@@ -97,13 +98,12 @@ export function createSqlStore(connectionString) {
         .query('UPDATE dbo.units SET available = @available WHERE id = @id');
       return { ...current, available };
     },
-    async upsertPerson({ displayName, email, phone = '' }) {
-      const emailKey = String(email || '').trim().toLowerCase();
-      if (!emailKey) throw new ValidationError('email is required');
+    async upsertPerson({ displayName, email = '', phone = '' }) {
+      const contact = resolvePersonContact({ email, phone });
       const p = await pool();
       const existing = await p
         .request()
-        .input('emailKey', sql.NVarChar, emailKey)
+        .input('emailKey', sql.NVarChar, contact.emailKey)
         .query(
           'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE email_key = @emailKey',
         );
@@ -112,22 +112,29 @@ export function createSqlStore(connectionString) {
           .request()
           .input('id', sql.NVarChar, existing.recordset[0].id)
           .input('displayName', sql.NVarChar, displayName)
-          .input('phone', sql.NVarChar, phone)
-          .query('UPDATE dbo.people SET display_name = @displayName, phone = @phone WHERE id = @id');
-        return { ...existing.recordset[0], displayName, phone, stripeCustomerId: existing.recordset[0].stripeCustomerId || '' };
+          .input('email', sql.NVarChar, contact.email || existing.recordset[0].email || '')
+          .input('phone', sql.NVarChar, contact.phone || existing.recordset[0].phone || '')
+          .query('UPDATE dbo.people SET display_name = @displayName, email = @email, phone = @phone WHERE id = @id');
+        return {
+          ...existing.recordset[0],
+          displayName,
+          email: contact.email || existing.recordset[0].email || '',
+          phone: contact.phone || existing.recordset[0].phone || '',
+          stripeCustomerId: existing.recordset[0].stripeCustomerId || '',
+        };
       }
       const id = `person-${randomUUID()}`;
       await p
         .request()
         .input('id', sql.NVarChar, id)
         .input('displayName', sql.NVarChar, displayName)
-        .input('email', sql.NVarChar, email)
-        .input('emailKey', sql.NVarChar, emailKey)
-        .input('phone', sql.NVarChar, phone)
+        .input('email', sql.NVarChar, contact.email)
+        .input('emailKey', sql.NVarChar, contact.emailKey)
+        .input('phone', sql.NVarChar, contact.phone)
         .query(
           'INSERT INTO dbo.people (id, display_name, email, email_key, phone) VALUES (@id, @displayName, @email, @emailKey, @phone)',
         );
-      return { id, displayName, email, emailKey, phone, stripeCustomerId: '' };
+      return { id, displayName, email: contact.email, emailKey: contact.emailKey, phone: contact.phone, stripeCustomerId: '' };
     },
     async listPeople() {
       const p = await pool();
