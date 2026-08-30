@@ -7,16 +7,23 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Renters</h1>
+    <div id="renters-errors" class="mt-4"></div>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
     const root = document.getElementById('list');
+    const errors = document.getElementById('renters-errors');
+
+    renderLoading(root, 'Loading renters…', { block: true });
     fetch('/api/office/people')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
+        clearLoading(root);
         if (!root) return;
         if (!res.ok) {
-          root.textContent = json.error || 'Could not load renters.';
+          showErrorBanner(errors, json.error || 'Could not load renters.');
           return;
         }
         const rows = json.people || [];
@@ -25,7 +32,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
           : 'No renters yet.';
       })
       .catch(() => {
-        if (root) root.textContent = 'Office API is not reachable.';
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       });
   </script>
 </BaseLayout>

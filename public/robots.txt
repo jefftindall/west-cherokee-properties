@@ -3,6 +3,5 @@ Allow: /
 Disallow: /office
 Disallow: /portal
 Disallow: /login
-Disallow: /style-guide
 
 Sitemap: https://westcherokee.com/sitemap-index.xml

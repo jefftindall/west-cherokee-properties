@@ -8,20 +8,29 @@ import PortalNav from '../../components/PortalNav.astro';
   <section class="mx-auto max-w-4xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Your lease</h1>
     <p class="mt-2 text-muted">This is the current lease on file for your household. Print or download a copy anytime.</p>
+    <div id="lease-errors" class="mt-4"></div>
     <p id="lease-actions" class="mt-4 flex flex-wrap gap-3"></p>
-    <p id="lease-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
-    <iframe id="lease-frame" title="Your lease" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
+    <p id="lease-status" class="mt-3 text-sm text-muted" role="status"></p>
+    <div id="lease-loading" class="mt-6"></div>
+    <iframe id="lease-frame" title="Your lease" class="mt-6 hidden min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
   <script>
+    import { renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
     const actions = document.getElementById('lease-actions');
     const status = document.getElementById('lease-status');
+    const errors = document.getElementById('lease-errors');
+    const loadingHost = document.getElementById('lease-loading');
     const frame = document.getElementById('lease-frame') as HTMLIFrameElement | null;
+
+    renderLoading(loadingHost, 'Loading lease…', { block: true });
 
     fetch('/api/portal/lease')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
+        if (loadingHost) loadingHost.innerHTML = '';
         if (!res.ok) {
-          if (status) status.textContent = json.error || 'Could not load lease.';
+          showErrorBanner(errors, json.error || 'Could not load lease.');
           return;
         }
         if (!json.lease) {
@@ -40,6 +49,7 @@ import PortalNav from '../../components/PortalNav.astro';
           document.getElementById('print-lease')?.addEventListener('click', () => frame?.contentWindow?.print());
         }
         if (frame) {
+          frame.classList.remove('hidden');
           frame.src = '/api/portal/lease/document';
           frame.addEventListener('load', () => {
             if (status) status.textContent = 'This is your current lease.';
@@ -47,7 +57,8 @@ import PortalNav from '../../components/PortalNav.astro';
         }
       })
       .catch(() => {
-        if (status) status.textContent = 'Portal API is not reachable.';
+        if (loadingHost) loadingHost.innerHTML = '';
+        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       });
   </script>
 </BaseLayout>

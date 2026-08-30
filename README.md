@@ -40,8 +40,8 @@ func start
 
 - [Authentication and authorization](docs/architecture/authentication-authorization.md)
 - [Data persistence](docs/architecture/data-persistence.md)
+- [UI style guide](docs/architecture/ui-style-guide.md)
 - [Initial setup](docs/setup.md)
-- [Brand & UI style guide](docs/style-guide.md) — visual: `/style-guide`
 - Runbooks: [GitHub Actions naming](docs/runbooks/github-actions-naming.md), [rotate secrets](docs/runbooks/rotate-secrets.md), [deploy and rollback](docs/runbooks/deploy-and-rollback.md), [DNS and domain](docs/runbooks/dns-and-domain.md), [cost and quotas](docs/runbooks/cost-and-quotas.md), [testing strategy](docs/runbooks/testing-strategy.md)
 
 ## Security model

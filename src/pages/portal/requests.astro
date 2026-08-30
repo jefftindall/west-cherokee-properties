@@ -16,44 +16,74 @@ import PortalNav from '../../components/PortalNav.astro';
         <label for="details">Details</label>
         <textarea id="details" name="details" rows="4" required maxlength="4000"></textarea>
       </div>
-      <button class="btn-primary" type="submit">Submit request</button>
+      <div id="req-errors"></div>
+      <button id="req-submit" class="btn-primary" type="submit">Submit request</button>
     </form>
     <p id="req-status" class="mt-2 text-sm text-muted" role="status"></p>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import {
+      clearErrorBanner,
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+
     const root = document.getElementById('list');
     const status = document.getElementById('req-status');
+    const errors = document.getElementById('req-errors');
+    const submit = document.getElementById('req-submit') as HTMLButtonElement | null;
+
     async function load() {
-      const res = await fetch('/api/portal/service-requests');
-      const json = await res.json().catch(() => ({}));
-      if (!root) return;
-      if (!res.ok) {
-        root.textContent = json.error || 'Could not load requests.';
-        return;
+      renderLoading(root, 'Loading requests…', { block: true });
+      try {
+        const res = await fetch('/api/portal/service-requests');
+        const json = await res.json().catch(() => ({}));
+        clearLoading(root);
+        if (!root) return;
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not load requests.');
+          return;
+        }
+        const rows = json.requests || [];
+        root.innerHTML = rows.length
+          ? `<ul class="space-y-2">${rows.map((r: { title: string; status: string }) => `<li>${r.title} · ${r.status}</li>`).join('')}</ul>`
+          : 'No requests yet.';
+      } catch {
+        clearLoading(root);
+        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       }
-      const rows = json.requests || [];
-      root.innerHTML = rows.length
-        ? `<ul class="space-y-2">${rows.map((r: { title: string; status: string }) => `<li>${r.title} · ${r.status}</li>`).join('')}</ul>`
-        : 'No requests yet.';
     }
+
     document.getElementById('req-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.target as HTMLFormElement;
       const data = new FormData(form);
-      if (status) status.textContent = 'Sending…';
-      const res = await fetch('/api/portal/service-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: data.get('title'), details: data.get('details') }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (status) status.textContent = res.ok ? 'Request submitted.' : json.error || 'Could not submit.';
-      if (res.ok) form.reset();
-      load();
+      clearErrorBanner(errors);
+      setButtonBusy(submit, true, 'Submitting…');
+      try {
+        const res = await fetch('/api/portal/service-requests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: data.get('title'), details: data.get('details') }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not submit request.');
+          return;
+        }
+        if (status) status.textContent = 'Request submitted.';
+        form.reset();
+        load();
+      } catch {
+        showErrorBanner(errors, 'Could not submit request. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
+      }
     });
-    load().catch(() => {
-      if (root) root.textContent = 'Portal API is not reachable.';
-    });
+
+    load();
   </script>
 </BaseLayout>

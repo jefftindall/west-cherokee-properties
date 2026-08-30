@@ -9,11 +9,15 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <p class="text-sm"><a class="btn-ghost" href="/office/leases">Back to leases</a></p>
     <h1 class="font-display mt-4 text-4xl text-pine">Lease document</h1>
     <p class="no-print mt-2 text-muted">Print this page and sign in person. The renter can download the same copy from the portal.</p>
+    <div id="lease-errors" class="no-print mt-4"></div>
     <p id="lease-actions" class="no-print mt-4 flex flex-wrap gap-3"></p>
-    <p id="lease-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
-    <iframe id="lease-frame" title="Lease document" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
+    <p id="lease-status" class="mt-3 text-sm text-muted" role="status"></p>
+    <div id="lease-loading" class="no-print mt-6"></div>
+    <iframe id="lease-frame" title="Lease document" class="mt-6 hidden min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
   <script>
+    import { renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
     async function ensureOfficeAuth() {
       const res = await fetch('/api/office/health');
       if (res.ok) return true;
@@ -26,6 +30,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
     const id = segment?.startsWith('lease-') ? segment : null;
     const actions = document.getElementById('lease-actions');
     const status = document.getElementById('lease-status');
+    const errors = document.getElementById('lease-errors');
+    const loadingHost = document.getElementById('lease-loading');
     const frame = document.getElementById('lease-frame') as HTMLIFrameElement | null;
     if (actions && id) {
       actions.innerHTML = `
@@ -36,13 +42,22 @@ import OfficeNav from '../../components/OfficeNav.astro';
       document.getElementById('print-lease')?.addEventListener('click', () => frame?.contentWindow?.print());
     }
     if (id && frame) {
+      renderLoading(loadingHost, 'Loading document…', { block: true });
       ensureOfficeAuth().then((authed) => {
         if (!authed) return;
+        frame.classList.remove('hidden');
         frame.src = `/api/office/leases/${id}/document`;
         frame.addEventListener('load', () => {
+          if (loadingHost) loadingHost.innerHTML = '';
           if (status) status.textContent = 'Ready to print or download.';
         });
+        frame.addEventListener('error', () => {
+          if (loadingHost) loadingHost.innerHTML = '';
+          showErrorBanner(errors, 'Could not load lease document.');
+        });
       });
+    } else if (!id) {
+      showErrorBanner(errors, 'Missing lease id in URL.');
     }
   </script>
 </BaseLayout>

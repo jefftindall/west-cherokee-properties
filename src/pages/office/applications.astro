@@ -8,48 +8,77 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Applications</h1>
     <p class="mt-2 text-muted">Approve an application to create a renter and lease on a vacant unit.</p>
+    <div id="app-errors" class="mt-4"></div>
     <div id="list" class="mt-6 overflow-x-auto text-sm"></div>
   </section>
   <script>
+    import {
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+
     const root = document.getElementById('list');
+    const errors = document.getElementById('app-errors');
+
     async function load() {
-      const res = await fetch('/api/office/applications');
-      const json = await res.json().catch(() => ({}));
-      if (!root) return;
-      if (!res.ok) {
-        root.textContent = json.error || 'Could not load applications.';
-        return;
-      }
-      const rows = json.applications || [];
-      if (!rows.length) {
-        root.textContent = 'No applications yet.';
-        return;
-      }
-      root.innerHTML = `<table class="w-full border-collapse"><thead><tr><th class="border-b border-line py-2 text-left">Name</th><th class="border-b border-line py-2 text-left">Community</th><th class="border-b border-line py-2 text-left">Status</th><th class="border-b border-line py-2 text-left"></th></tr></thead><tbody>${rows
-        .map(
-          (row: { id: string; fullName: string; propertySlug: string; status: string }) =>
-            `<tr><td class="py-2">${row.fullName}</td><td>${row.propertySlug}</td><td>${row.status}</td><td>${
-              row.status === 'submitted' || row.status === 'in_review'
-                ? `<button data-id="${row.id}" data-action="approve" class="btn-primary px-2 py-1 text-xs">Approve</button> <button data-id="${row.id}" data-action="decline" class="btn-secondary px-2 py-1 text-xs">Decline</button>`
-                : ''
-            }</td></tr>`,
-        )
-        .join('')}</tbody></table>`;
-      root.querySelectorAll('button[data-id]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const id = (btn as HTMLButtonElement).dataset.id;
-          const action = (btn as HTMLButtonElement).dataset.action;
-          await fetch(`/api/office/applications/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: action === 'approve' ? 'approved' : 'declined' }),
+      renderLoading(root, 'Loading applications…', { block: true });
+      try {
+        const res = await fetch('/api/office/applications');
+        const json = await res.json().catch(() => ({}));
+        clearLoading(root);
+        if (!root) return;
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not load applications.');
+          return;
+        }
+        const rows = json.applications || [];
+        if (!rows.length) {
+          root.textContent = 'No applications yet.';
+          return;
+        }
+        root.innerHTML = `<table class="w-full border-collapse"><thead><tr><th class="border-b border-line py-2 text-left">Name</th><th class="border-b border-line py-2 text-left">Community</th><th class="border-b border-line py-2 text-left">Status</th><th class="border-b border-line py-2 text-left"></th></tr></thead><tbody>${rows
+          .map(
+            (row: { id: string; fullName: string; propertySlug: string; status: string }) =>
+              `<tr><td class="py-2">${row.fullName}</td><td>${row.propertySlug}</td><td>${row.status}</td><td>${
+                row.status === 'submitted' || row.status === 'in_review'
+                  ? `<button data-id="${row.id}" data-action="approve" class="btn-primary px-2 py-1 text-xs">Approve</button> <button data-id="${row.id}" data-action="decline" class="btn-secondary px-2 py-1 text-xs">Decline</button>`
+                  : ''
+              }</td></tr>`,
+          )
+          .join('')}</tbody></table>`;
+        root.querySelectorAll('button[data-id]').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const button = btn as HTMLButtonElement;
+            const id = button.dataset.id;
+            const action = button.dataset.action;
+            setButtonBusy(button, true, action === 'approve' ? 'Approving…' : 'Declining…');
+            try {
+              const res = await fetch(`/api/office/applications/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: action === 'approve' ? 'approved' : 'declined' }),
+              });
+              const json = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                showErrorBanner(errors, json.error || 'Could not update application.');
+                return;
+              }
+              load();
+            } catch {
+              showErrorBanner(errors, 'Could not update application. Try again.');
+            } finally {
+              setButtonBusy(button, false);
+            }
           });
-          load();
         });
-      });
+      } catch {
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+      }
     }
-    load().catch(() => {
-      if (root) root.textContent = 'Office API is not reachable.';
-    });
+
+    load();
   </script>
 </BaseLayout>

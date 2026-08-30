@@ -8,10 +8,19 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-3xl px-4 py-10">
     <p class="text-sm"><a class="btn-ghost" href="/office">Back to dashboard</a></p>
     <h1 class="font-display mt-4 text-4xl text-pine">Manage unit</h1>
-    <p id="unit-status" class="mt-3 text-sm text-muted" role="status">Loading…</p>
+    <div id="unit-errors" class="mt-3"></div>
+    <p id="unit-status" class="mt-3 text-sm text-muted"></p>
     <div id="unit-panel" class="mt-6 hidden rounded-lg border border-line bg-panel p-5"></div>
+    <div id="unit-loading" class="mt-6"></div>
   </section>
   <script>
+    import {
+      clearErrorBanner,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+
     function safeReturnUrl() {
       return encodeURIComponent(window.location.pathname + window.location.search);
     }
@@ -31,27 +40,34 @@ import OfficeNav from '../../components/OfficeNav.astro';
     const unitId = params.get('unitId');
     const status = document.getElementById('unit-status');
     const panel = document.getElementById('unit-panel');
+    const errors = document.getElementById('unit-errors');
+    const loadingHost = document.getElementById('unit-loading');
 
     async function loadUnit() {
       if (!unitId) {
-        if (status) status.textContent = 'Missing unitId query parameter.';
+        showErrorBanner(errors, 'Missing unitId query parameter.');
         return;
       }
       if (!(await ensureOfficeAuth())) return;
 
-      const res = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`);
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        if (status) status.textContent = json.error || 'Unit not found.';
-        return;
-      }
+      renderLoading(loadingHost, 'Loading unit…', { block: true });
+      if (panel) panel.classList.add('hidden');
 
-      const { unit, property, lease, tenant } = json;
-      if (status) status.textContent = `${property?.title || 'Property'} · Unit ${unit.label}`;
-      if (!panel) return;
+      try {
+        const res = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`);
+        const json = await res.json().catch(() => ({}));
+        if (loadingHost) loadingHost.innerHTML = '';
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Unit not found.');
+          return;
+        }
 
-      panel.classList.remove('hidden');
-      panel.innerHTML = `
+        const { unit, property, lease, tenant } = json;
+        if (status) status.textContent = `${property?.title || 'Property'} · Unit ${unit.label}`;
+        if (!panel) return;
+
+        panel.classList.remove('hidden');
+        panel.innerHTML = `
         <dl class="grid gap-3 text-sm md:grid-cols-2">
           <div><dt class="font-semibold text-pine">Property</dt><dd>${property?.title || '—'}</dd></div>
           <div><dt class="font-semibold text-pine">Bed / bath</dt><dd>${unit.bedrooms} / ${unit.bathrooms}</dd></div>
@@ -65,7 +81,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
             <input id="available" name="available" type="checkbox" ${unit.available ? 'checked' : ''} />
             Accepting applications
           </label>
-          <button class="btn-primary" type="submit">Save availability</button>
+          <button id="save-availability" class="btn-primary" type="submit">Save availability</button>
         </form>
         ${
           lease
@@ -74,21 +90,36 @@ import OfficeNav from '../../components/OfficeNav.astro';
         }
       `;
 
-      document.getElementById('availability-form')?.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const available = (document.getElementById('available') as HTMLInputElement | null)?.checked ?? false;
-        const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ available }),
+        document.getElementById('availability-form')?.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const saveButton = document.getElementById('save-availability') as HTMLButtonElement | null;
+          const available = (document.getElementById('available') as HTMLInputElement | null)?.checked ?? false;
+          clearErrorBanner(errors);
+          setButtonBusy(saveButton, true, 'Saving…');
+          try {
+            const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`, {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ available }),
+            });
+            const saveJson = await saveRes.json().catch(() => ({}));
+            if (!saveRes.ok) {
+              showErrorBanner(errors, saveJson.error || 'Could not save availability.');
+              return;
+            }
+            if (status) {
+              status.textContent = `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`;
+            }
+          } catch {
+            showErrorBanner(errors, 'Could not save availability. Try again.');
+          } finally {
+            setButtonBusy(saveButton, false);
+          }
         });
-        const saveJson = await saveRes.json().catch(() => ({}));
-        if (status) {
-          status.textContent = saveRes.ok
-            ? `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`
-            : saveJson.error || 'Could not save availability.';
-        }
-      });
+      } catch {
+        if (loadingHost) loadingHost.innerHTML = '';
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+      }
     }
 
     loadUnit();
