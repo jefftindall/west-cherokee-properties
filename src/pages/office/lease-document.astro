@@ -1,6 +1,6 @@
 ---
-import BaseLayout from '../../../layouts/BaseLayout.astro';
-import OfficeNav from '../../../components/OfficeNav.astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
 ---
 
 <BaseLayout title="Lease document" description="Print or download this lease" noIndex hideNav hideFooter>
@@ -14,7 +14,8 @@ import OfficeNav from '../../../components/OfficeNav.astro';
     <iframe id="lease-frame" title="Lease document" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
   <script>
-    const id = window.location.pathname.split('/').filter(Boolean).pop();
+    const segment = window.location.pathname.split('/').filter(Boolean).pop();
+    const id = segment?.startsWith('lease-') ? segment : null;
     const actions = document.getElementById('lease-actions');
     const status = document.getElementById('lease-status');
     const frame = document.getElementById('lease-frame') as HTMLIFrameElement | null;
