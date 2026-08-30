@@ -29,10 +29,12 @@ if [[ -z "${GH_APP_ID:-}" || -z "${GH_APP_INSTALLATION_ID:-}" ]]; then
   exit 1
 fi
 
-pem="$(mktemp)"
-cleanup() { rm -f "$pem"; }
+# az keyvault secret download will not overwrite an existing file.
+dir="$(mktemp -d)"
+pem="$dir/github-app.pem"
+cleanup() { rm -rf "$dir"; }
 trap cleanup EXIT
-chmod 600 "$pem"
+chmod 700 "$dir"
 
 az keyvault secret download \
   --vault-name "$VAULT" \
@@ -41,6 +43,7 @@ az keyvault secret download \
   --encoding utf-8 \
   --output none \
   --only-show-errors
+chmod 600 "$pem"
 
 node "$ROOT/scripts/mint-github-app-token.mjs" \
   --app-id "$GH_APP_ID" \
