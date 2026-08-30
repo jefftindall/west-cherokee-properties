@@ -15,6 +15,9 @@ import {
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
 
+// SWA-linked Functions use authLevel 'anonymous' so Easy Auth can inject x-ms-client-principal.
+// Office authorization is enforced in officeCaller / permissionGate, not by the Functions key.
+
 function wrap(handler) {
   return async (request) => {
     const correlationId = newCorrelationId();

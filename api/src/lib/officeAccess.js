@@ -2,6 +2,7 @@ import {
   getClientPrincipal,
   identityCandidates,
   isLocalDev,
+  isWorkforceProvider,
   parseAllowlist,
   primaryEmail,
 } from './auth.js';
@@ -50,6 +51,9 @@ export async function officeCaller(request, env = process.env) {
 
   const principal = getClientPrincipal(request);
   if (!principal) throw new OfficeUnauthorizedError();
+  if (!isWorkforceProvider(principal)) {
+    throw new OfficeForbiddenError('Staff sign-in is required for the office.');
+  }
 
   const store = getStore();
   const candidates = identityCandidates(principal);

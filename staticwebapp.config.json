@@ -24,6 +24,16 @@
       "headers": { "Cache-Control": "private, no-store" }
     },
     {
+      "route": "/api/office/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/api/portal/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
       "route": "/office/unit",
       "allowedRoles": ["anonymous", "authenticated"],
       "headers": { "Cache-Control": "private, no-store" }
