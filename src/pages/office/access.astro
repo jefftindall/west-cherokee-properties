@@ -8,22 +8,30 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Access</h1>
     <p class="mt-2 text-muted">Workforce Entra identities only. Renters never appear here.</p>
+    <div id="access-errors" class="mt-4"></div>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
     const root = document.getElementById('list');
+    const errors = document.getElementById('access-errors');
+
+    renderLoading(root, 'Loading access…', { block: true });
     fetch('/api/office/access')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
+        clearLoading(root);
         if (!root) return;
         if (!res.ok) {
-          root.textContent = json.error || 'Could not load access.';
+          showErrorBanner(errors, json.error || 'Could not load access.');
           return;
         }
         root.textContent = JSON.stringify(json.users || [], null, 2);
       })
       .catch(() => {
-        if (root) root.textContent = 'Office API is not reachable.';
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       });
   </script>
 </BaseLayout>

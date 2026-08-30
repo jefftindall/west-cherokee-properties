@@ -31,7 +31,6 @@ export default defineConfig({
   integrations: [
     sitemap({
       filter: (page) =>
-        !page.includes('/style-guide') &&
         !page.includes('/office') &&
         !page.includes('/portal') &&
         !page.includes('/login'),

@@ -32,7 +32,9 @@ This mirrors the PR gate workflow [`.github/workflows/ci-static-analysis.yml`](.
 
 Never print secret values in workflows or scripts. See [`.cursor/rules/never-echo-secrets.mdc`](.cursor/rules/never-echo-secrets.mdc). If leaked, rotate immediately ([rotate-secrets.md](docs/runbooks/rotate-secrets.md)).
 
-### Brand
+### Brand and UI
+
+Follow [`docs/architecture/ui-style-guide.md`](docs/architecture/ui-style-guide.md) for tokens, buttons, spinners, busy states, and dismissible error banners on async flows.
 
 West Cherokee Properties is a **rental property management** business with homes in Cartersville, Georgia: 124 W Cherokee Ave (Units A and B), 11 Noble St (single unit; same tax parcel and policies as 124 W Cherokee), and 10 Falcon Circle (Units A and B). Tone: trustworthy, local, residential. Do not copy Broadway/theatre visual language.
 

@@ -29,18 +29,24 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         <textarea id="message" name="message" rows="6" required maxlength="5000"></textarea>
       </div>
       <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
-      <button class="btn-primary" type="submit">Send message</button>
+      <div id="contact-errors"></div>
+      <button id="contact-submit" class="btn-primary" type="submit">Send message</button>
       <p id="contact-status" class="text-sm text-muted" role="status"></p>
     </form>
   </section>
   <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
+    import { clearErrorBanner, setButtonBusy, showErrorBanner } from '../lib/uiFeedback.ts';
+
     const form = document.getElementById('contact-form') as HTMLFormElement | null;
     const status = document.getElementById('contact-status');
+    const errors = document.getElementById('contact-errors');
+    const submit = document.getElementById('contact-submit') as HTMLButtonElement | null;
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!status) return;
-      status.textContent = 'Sending…';
+      clearErrorBanner(errors);
+      setButtonBusy(submit, true, 'Sending…');
       const data = new FormData(form);
       const tokenInput = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
       const payload = {
@@ -57,13 +63,15 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
-          status.textContent = json.error || 'Could not send. Try again.';
+          showErrorBanner(errors, json.error || 'Could not send. Try again.');
           return;
         }
         status.textContent = 'Thanks — we received your message.';
         form.reset();
       } catch {
-        status.textContent = 'Could not send. Try again.';
+        showErrorBanner(errors, 'Could not send. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
       }
     });
   </script>

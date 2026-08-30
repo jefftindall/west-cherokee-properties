@@ -7,7 +7,8 @@ import PortalNav from '../../components/PortalNav.astro';
   <PortalNav />
   <section class="mx-auto max-w-3xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Resident portal</h1>
-    <p id="portal-status" class="mt-4 text-muted">Loading your household…</p>
+    <div id="portal-errors" class="mt-4"></div>
+    <p id="portal-status" class="mt-4 text-muted"></p>
     <div class="mt-8 grid gap-4">
       <a class="rounded-lg border border-line bg-panel p-5 no-underline" href="/portal/lease">Lease</a>
       <a class="rounded-lg border border-line bg-panel p-5 no-underline" href="/portal/invoices">Invoices and receipts</a>
@@ -15,10 +16,15 @@ import PortalNav from '../../components/PortalNav.astro';
     </div>
   </section>
   <script>
+    import { renderLoading, clearLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+
     const el = document.getElementById('portal-status');
+    const errors = document.getElementById('portal-errors');
+    renderLoading(el, 'Loading your household…');
     fetch('/api/portal/me')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
+        clearLoading(el);
         if (!el) return;
         if (res.ok && json.person) {
           el.textContent = `Signed in as ${json.person.email}.`;
@@ -26,11 +32,12 @@ import PortalNav from '../../components/PortalNav.astro';
           el.innerHTML =
             'No lease is on file for this sign-in yet. If you already live with us, write <a href="/contact">the office</a> so we can link your account.';
         } else {
-          el.textContent = json.error || 'Could not load portal.';
+          showErrorBanner(errors, json.error || 'Could not load portal.');
         }
       })
       .catch(() => {
-        if (el) el.textContent = 'Portal API is not reachable locally unless Functions are running.';
+        clearLoading(el);
+        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       });
   </script>
 </BaseLayout>

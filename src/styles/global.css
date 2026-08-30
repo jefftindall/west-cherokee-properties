@@ -53,39 +53,140 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   border-radius: 0.375rem;
   background: var(--color-clay);
   color: white;
   font-weight: 600;
   padding: 0.75rem 1.25rem;
+  border: none;
+  cursor: pointer;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: #c45e00;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  cursor: not-allowed;
 }
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 0.5rem;
   border-radius: 0.375rem;
   background: var(--color-grove);
   color: white;
   font-weight: 600;
   padding: 0.75rem 1.25rem;
+  border: none;
+  cursor: pointer;
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: #0057b0;
 }
 
 .btn-ghost {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   color: var(--color-grove);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 0.2em;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-primary.is-busy,
+.btn-secondary.is-busy,
+.btn-ghost.is-busy {
+  opacity: 0.88;
+  pointer-events: none;
+  cursor: wait;
+}
+
+@keyframes wcp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.wcp-spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--color-line);
+  border-top-color: var(--color-grove);
+  border-radius: 50%;
+  animation: wcp-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.wcp-spinner-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+.wcp-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.wcp-loading-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 6rem;
+  padding: 2rem 1rem;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.wcp-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 0.375rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.875rem;
+}
+
+.wcp-alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.wcp-alert-message {
+  margin: 0;
+  flex: 1;
+}
+
+.wcp-alert-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+}
+
+.wcp-alert-dismiss:hover {
+  background: rgb(0 0 0 / 0.06);
 }
 
 input,

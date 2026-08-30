@@ -11,52 +11,82 @@ import OfficeNav from '../../components/OfficeNav.astro';
       <input name="leaseId" placeholder="Lease ID" required />
       <input name="periodStart" type="date" required />
       <input name="periodEnd" type="date" required />
-      <button class="btn-primary" type="submit">Generate this period</button>
+      <button id="inv-submit" class="btn-primary" type="submit">Generate this period</button>
     </form>
+    <div id="inv-errors" class="mt-2"></div>
     <p id="inv-status" class="mt-2 text-sm text-muted" role="status"></p>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import {
+      clearErrorBanner,
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+
     const root = document.getElementById('list');
     const status = document.getElementById('inv-status');
+    const errors = document.getElementById('inv-errors');
+    const submit = document.getElementById('inv-submit') as HTMLButtonElement | null;
+
     async function load() {
-      const res = await fetch('/api/office/invoices');
-      const json = await res.json().catch(() => ({}));
-      if (!root) return;
-      if (!res.ok) {
-        root.textContent = json.error || 'Could not load invoices.';
-        return;
+      renderLoading(root, 'Loading invoices…', { block: true });
+      try {
+        const res = await fetch('/api/office/invoices');
+        const json = await res.json().catch(() => ({}));
+        clearLoading(root);
+        if (!root) return;
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not load invoices.');
+          return;
+        }
+        const rows = json.invoices || [];
+        root.innerHTML = rows.length
+          ? `<ul class="space-y-2">${rows
+              .map(
+                (i: { id: string; status: string; amountCents: number; periodStart: string }) =>
+                  `<li>${i.id} · ${i.periodStart} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}</li>`,
+              )
+              .join('')}</ul>`
+          : 'No invoices yet.';
+      } catch {
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
-      const rows = json.invoices || [];
-      root.innerHTML = rows.length
-        ? `<ul class="space-y-2">${rows
-            .map(
-              (i: { id: string; status: string; amountCents: number; periodStart: string }) =>
-                `<li>${i.id} · ${i.periodStart} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}</li>`,
-            )
-            .join('')}</ul>`
-        : 'No invoices yet.';
     }
+
     document.getElementById('inv-form')?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const form = event.target as HTMLFormElement;
       const data = new FormData(form);
-      if (status) status.textContent = 'Creating…';
-      const res = await fetch('/api/office/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leaseId: data.get('leaseId'),
-          periodStart: data.get('periodStart'),
-          periodEnd: data.get('periodEnd'),
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (status) status.textContent = res.ok ? 'Invoice created.' : json.error || 'Could not create invoice.';
-      load();
+      clearErrorBanner(errors);
+      setButtonBusy(submit, true, 'Creating…');
+      try {
+        const res = await fetch('/api/office/invoices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            leaseId: data.get('leaseId'),
+            periodStart: data.get('periodStart'),
+            periodEnd: data.get('periodEnd'),
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not create invoice.');
+          return;
+        }
+        if (status) status.textContent = 'Invoice created.';
+        load();
+      } catch {
+        showErrorBanner(errors, 'Could not create invoice. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
+      }
     });
-    load().catch(() => {
-      if (root) root.textContent = 'Office API is not reachable.';
-    });
+
+    load();
   </script>
 </BaseLayout>

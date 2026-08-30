@@ -65,13 +65,21 @@ import OfficeNav from '../../components/OfficeNav.astro';
       </div>
       <p id="unit-hint" class="md:col-span-2 text-sm text-muted"></p>
       <div class="flex items-end">
-        <button class="btn-primary" type="submit">Prepare lease</button>
+        <button id="lease-submit" class="btn-primary" type="submit">Prepare lease</button>
       </div>
     </form>
+    <div id="lease-errors" class="mt-2"></div>
     <p id="lease-status" class="mt-2 text-sm text-muted" role="status"></p>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import {
+      clearErrorBanner,
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
     type Unit = { id: string; label: string; propertyId: string };
     type Person = { id: string; displayName: string; email: string };
     type Lease = {
@@ -88,6 +96,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
 
     const root = document.getElementById('list');
     const status = document.getElementById('lease-status');
+    const errors = document.getElementById('lease-errors');
+    const submit = document.getElementById('lease-submit') as HTMLButtonElement | null;
     const unitSelect = document.getElementById('unitId') as HTMLSelectElement | null;
     const hint = document.getElementById('unit-hint');
     let units: Unit[] = [];
@@ -106,33 +116,36 @@ import OfficeNav from '../../components/OfficeNav.astro';
     }
 
     async function load() {
-      const res = await fetch('/api/office/leases');
-      const json = await res.json().catch(() => ({}));
-      if (!root) return;
-      if (!res.ok) {
-        root.textContent = json.error || 'Could not load leases.';
-        return;
-      }
-      units = json.units || [];
-      people = json.people || [];
-      unitDefaults = json.unitDefaults || {};
-      if (unitSelect && !unitSelect.options.length) {
-        unitSelect.innerHTML = units
-          .map((unit) => {
-            const address = unitDefaults[unit.id]?.premisesAddress || unit.id;
-            return `<option value="${unit.id}">${address}</option>`;
-          })
-          .join('');
-        applyUnitDefaults();
-      }
-      const rows: Lease[] = json.leases || [];
-      root.innerHTML = rows.length
-        ? `<ul class="space-y-3">${rows
-            .map((lease) => {
-              const person = people.find((row) => row.id === lease.personId);
-              const address = unitDefaults[lease.unitId]?.premisesAddress || lease.unitId;
-              const pets = lease.terms?.petCount || 0;
-              return `<li class="rounded-lg border border-line bg-panel p-4">
+      renderLoading(root, 'Loading leases…', { block: true });
+      try {
+        const res = await fetch('/api/office/leases');
+        const json = await res.json().catch(() => ({}));
+        clearLoading(root);
+        if (!root) return;
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not load leases.');
+          return;
+        }
+        units = json.units || [];
+        people = json.people || [];
+        unitDefaults = json.unitDefaults || {};
+        if (unitSelect && !unitSelect.options.length) {
+          unitSelect.innerHTML = units
+            .map((unit) => {
+              const address = unitDefaults[unit.id]?.premisesAddress || unit.id;
+              return `<option value="${unit.id}">${address}</option>`;
+            })
+            .join('');
+          applyUnitDefaults();
+        }
+        const rows: Lease[] = json.leases || [];
+        root.innerHTML = rows.length
+          ? `<ul class="space-y-3">${rows
+              .map((lease) => {
+                const person = people.find((row) => row.id === lease.personId);
+                const address = unitDefaults[lease.unitId]?.premisesAddress || lease.unitId;
+                const pets = lease.terms?.petCount || 0;
+                return `<li class="rounded-lg border border-line bg-panel p-4">
                 <div class="font-semibold text-pine">${address}</div>
                 <div class="text-muted">${person?.displayName || lease.personId} · ${lease.status} · $${(lease.rentCents / 100).toFixed(2)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
                 <div class="mt-2 flex flex-wrap gap-3">
@@ -140,9 +153,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
                   <a class="btn-ghost" href="/api/office/leases/${lease.id}/document?download=1">Download</a>
                 </div>
               </li>`;
-            })
-            .join('')}</ul>`
-        : 'No leases yet.';
+              })
+              .join('')}</ul>`
+          : 'No leases yet.';
+      } catch {
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+      }
     }
 
     unitSelect?.addEventListener('change', applyUnitDefaults);
@@ -158,40 +175,45 @@ import OfficeNav from '../../components/OfficeNav.astro';
       event.preventDefault();
       const form = event.target as HTMLFormElement;
       const data = new FormData(form);
-      if (status) status.textContent = 'Saving…';
-      const res = await fetch('/api/office/leases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          unitId: data.get('unitId'),
-          personEmail: data.get('personEmail'),
-          personName: data.get('personName'),
-          startDate: data.get('startDate'),
-          endDate: data.get('endDate'),
-          rentCents: dollarsToCents(data.get('rentDollars')),
-          terms: {
-            tenantNames: String(data.get('tenantNames') || ''),
-            authorizedOccupants: String(data.get('authorizedOccupants') || ''),
-            maxOccupants: Number(data.get('maxOccupants')),
-            securityDepositCents: dollarsToCents(data.get('depositDollars')),
-            petCount: Number(data.get('petCount')),
-            approvedPets: String(data.get('approvedPets') || 'None'),
-            additionalProvisions: String(data.get('additionalProvisions') || 'None.'),
-            effectiveDate: String(data.get('startDate') || ''),
-          },
-        }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (status) {
-        status.textContent = res.ok
-          ? 'Lease prepared. Open View / print to sign in person.'
-          : json.error || 'Could not create lease.';
+      clearErrorBanner(errors);
+      setButtonBusy(submit, true, 'Preparing…');
+      try {
+        const res = await fetch('/api/office/leases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            unitId: data.get('unitId'),
+            personEmail: data.get('personEmail'),
+            personName: data.get('personName'),
+            startDate: data.get('startDate'),
+            endDate: data.get('endDate'),
+            rentCents: dollarsToCents(data.get('rentDollars')),
+            terms: {
+              tenantNames: String(data.get('tenantNames') || ''),
+              authorizedOccupants: String(data.get('authorizedOccupants') || ''),
+              maxOccupants: Number(data.get('maxOccupants')),
+              securityDepositCents: dollarsToCents(data.get('depositDollars')),
+              petCount: Number(data.get('petCount')),
+              approvedPets: String(data.get('approvedPets') || 'None'),
+              additionalProvisions: String(data.get('additionalProvisions') || 'None.'),
+              effectiveDate: String(data.get('startDate') || ''),
+            },
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not create lease.');
+          return;
+        }
+        if (status) status.textContent = 'Lease prepared. Open View / print to sign in person.';
+        if (json.lease?.id) window.location.href = `/office/leases/${json.lease.id}`;
+        else load();
+      } catch {
+        showErrorBanner(errors, 'Could not create lease. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
       }
-      if (res.ok && json.lease?.id) window.location.href = `/office/leases/${json.lease.id}`;
-      else load();
     });
-    load().catch(() => {
-      if (root) root.textContent = 'Office API is not reachable.';
-    });
+    load();
   </script>
 </BaseLayout>

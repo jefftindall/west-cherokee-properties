@@ -73,7 +73,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
             <textarea id="notes" name="notes" rows="4" maxlength="4000"></textarea>
           </div>
           <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
-          <button class="btn-primary" type="submit">Submit application</button>
+          <div id="apply-errors"></div>
+          <button id="apply-submit" class="btn-primary" type="submit">Submit application</button>
           <p id="apply-status" class="text-sm text-muted" role="status"></p>
         </form>
       )
@@ -82,8 +83,12 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
   {accepting ? <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer /> : null}
   {accepting ? (
     <script>
+      import { clearErrorBanner, setButtonBusy, showErrorBanner } from '../lib/uiFeedback.ts';
+
       const form = document.getElementById('apply-form') as HTMLFormElement | null;
       const status = document.getElementById('apply-status');
+      const errors = document.getElementById('apply-errors');
+      const submit = document.getElementById('apply-submit') as HTMLButtonElement | null;
       const select = document.getElementById('propertySlug') as HTMLSelectElement | null;
       const requested = new URLSearchParams(location.search).get('property');
       if (select && requested) {
@@ -93,7 +98,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
       form?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!status) return;
-        status.textContent = 'Submitting…';
+        clearErrorBanner(errors);
+        setButtonBusy(submit, true, 'Submitting…');
         const data = new FormData(form);
         const tokenInput = form.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]');
         const payload = {
@@ -114,13 +120,15 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
           });
           const json = await res.json().catch(() => ({}));
           if (!res.ok) {
-            status.textContent = json.error || 'Could not submit. Try again.';
+            showErrorBanner(errors, json.error || 'Could not submit. Try again.');
             return;
           }
           status.textContent = 'Application received. We will email you next steps.';
           form.reset();
         } catch {
-          status.textContent = 'Could not submit. Try again.';
+          showErrorBanner(errors, 'Could not submit. Try again.');
+        } finally {
+          setButtonBusy(submit, false);
         }
       });
     </script>

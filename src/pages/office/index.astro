@@ -10,10 +10,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <p class="mt-2 text-muted">
       Unit health from live lease and invoice data. Green is current, yellow is within grace, red is late after the fee applies, vacant has no active lease.
     </p>
-    <p id="dashboard-status" class="mt-4 text-sm text-muted" role="status">Loading dashboard…</p>
+    <div id="dashboard-errors" class="mt-4"></div>
+    <p id="dashboard-status" class="mt-4 text-sm text-muted"></p>
     <div id="dashboard-root" class="mt-8 grid gap-8"></div>
   </section>
   <script>
+    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
     type Health = 'green' | 'yellow' | 'red' | 'vacant';
     type DashboardUnit = {
       id: string;
@@ -51,6 +53,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 
     const status = document.getElementById('dashboard-status');
     const root = document.getElementById('dashboard-root');
+    const errors = document.getElementById('dashboard-errors');
 
     function formatMoney(cents: number) {
       return `$${(Number(cents) / 100).toFixed(2)}`;
@@ -100,11 +103,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
         .join('');
     }
 
+    renderLoading(root, 'Loading dashboard…', { block: true });
+
     fetch('/api/office/dashboard')
       .then(async (res) => {
         const json = await res.json().catch(() => ({}));
+        clearLoading(root);
         if (!res.ok) {
-          if (status) status.textContent = json.error || 'Could not load dashboard.';
+          showErrorBanner(errors, json.error || 'Could not load dashboard.');
           return;
         }
         if (status) {
@@ -113,7 +119,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
         renderDashboard(json);
       })
       .catch(() => {
-        if (status) status.textContent = 'Office API is not reachable locally unless Functions are running.';
+        clearLoading(root);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       });
   </script>
 </BaseLayout>
