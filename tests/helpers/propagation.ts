@@ -57,15 +57,54 @@ export async function waitForRequestOk(
   throw new Error(`Timed out waiting for ${path} (last: ${lastError || lastStatus})`);
 }
 
+const LOGIN_LOCATION = /\/(\.auth\/login|login)/i;
+
+function pathnameKey(urlOrPath: string, base: string): string {
+  try {
+    return new URL(urlOrPath, base).pathname.replace(/\/$/, '') || '/';
+  } catch {
+    return urlOrPath.replace(/\/$/, '') || '/';
+  }
+}
+
+/**
+ * SWA default hosts 301 to the custom domain on the same path before Easy Auth
+ * issues 302 /login. Follow that hop only; do not follow into the login page.
+ */
 export async function expectAnonymousAuthRedirect(
   request: APIRequestContext,
   path: string,
 ) {
-  const response = await request.get(path, { maxRedirects: 0 });
-  expect(response.status(), `${path} should redirect anonymous callers`).toBeGreaterThanOrEqual(300);
-  expect(response.status()).toBeLessThan(400);
-  const location = response.headers()['location'] || '';
-  expect(location, `${path} location`).toMatch(/\/(\.auth\/login|login)/i);
-  const cache = response.headers()['cache-control'] || '';
-  if (cache) expect(cache).toMatch(/no-store|private/i);
+  const deadline = Date.now() + PROPAGATION_DEADLINE_MS;
+  let lastDetail = '';
+  let target = path;
+
+  while (Date.now() < deadline) {
+    const seen = new Set<string>();
+    for (let hop = 0; hop < 5; hop += 1) {
+      const response = await request.get(target, { maxRedirects: 0 });
+      const status = response.status();
+      const location = response.headers()['location'] || '';
+      lastDetail = `HTTP ${status} location=${location || '(none)'}`;
+
+      if (status >= 300 && status < 400 && LOGIN_LOCATION.test(location)) {
+        const cache = response.headers()['cache-control'] || '';
+        if (cache) expect(cache).toMatch(/no-store|private/i);
+        return;
+      }
+
+      if (status < 300 || status >= 400 || !location) break;
+
+      const next = new URL(location, response.url());
+      if (pathnameKey(next.href, response.url()) !== pathnameKey(path, response.url())) break;
+      if (seen.has(next.href)) break;
+      seen.add(next.href);
+      target = next.href;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, PROPAGATION_POLL_MS));
+    target = path;
+  }
+
+  throw new Error(`Timed out waiting for ${path} to redirect anonymous callers to login (last: ${lastDetail})`);
 }
