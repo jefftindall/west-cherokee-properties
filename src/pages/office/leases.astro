@@ -8,7 +8,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Leases</h1>
     <p class="mt-2 text-muted">
-      Prepare the Georgia lease here, print it, and sign in person. Office and the renter can both download the current copy. Pets are $20 each per month.
+      Prepare the Georgia lease here, print it, and sign in person. For a single adult, enter the primary renter only.
+      Add co-tenants or other occupants when needed. Pets are $20 each per month.
     </p>
     <form id="lease-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
       <div>
@@ -20,12 +21,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <input id="personName" name="personName" required maxlength="200" autocomplete="name" />
       </div>
       <div>
-        <label for="personEmail">Renter email</label>
+        <label for="personEmail">Primary renter email</label>
         <input id="personEmail" name="personEmail" type="email" required autocomplete="email" />
       </div>
       <div>
-        <label for="tenantNames">All adult tenant names (one per line)</label>
-        <textarea id="tenantNames" name="tenantNames" rows="2" required></textarea>
+        <label for="personPhone">Primary renter phone</label>
+        <input id="personPhone" name="personPhone" type="tel" maxlength="40" autocomplete="tel" />
       </div>
       <div>
         <label for="startDate">Start</label>
@@ -48,10 +49,6 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <input id="maxOccupants" name="maxOccupants" type="number" min="1" max="12" required />
       </div>
       <div>
-        <label for="authorizedOccupants">Authorized occupants</label>
-        <textarea id="authorizedOccupants" name="authorizedOccupants" rows="2" required></textarea>
-      </div>
-      <div>
         <label for="petCount">Approved pets</label>
         <input id="petCount" name="petCount" type="number" min="0" max="8" value="0" required />
       </div>
@@ -62,6 +59,21 @@ import OfficeNav from '../../components/OfficeNav.astro';
       <div class="md:col-span-2">
         <label for="additionalProvisions">Additional provisions</label>
         <textarea id="additionalProvisions" name="additionalProvisions" rows="2">None.</textarea>
+      </div>
+      <div class="md:col-span-2 space-y-4 rounded-lg border border-line bg-cream p-4">
+        <div>
+          <h2 class="font-semibold text-pine">Household members</h2>
+          <p class="mt-1 text-sm text-muted">
+            Co-tenants are adult lease signers and each gets a renter record with an email or phone number. Additional
+            occupants are optional and can include children of the primary leaseholder.
+          </p>
+        </div>
+        <div id="co-tenants" class="space-y-3"></div>
+        <div id="occupants" class="space-y-3"></div>
+        <div class="flex flex-wrap gap-3">
+          <button id="add-co-tenant" class="btn-secondary" type="button">Add co-tenant</button>
+          <button id="add-occupant" class="btn-ghost" type="button">Add occupant</button>
+        </div>
       </div>
       <p id="unit-hint" class="md:col-span-2 text-sm text-muted"></p>
       <div class="flex items-end">
@@ -94,15 +106,27 @@ import OfficeNav from '../../components/OfficeNav.astro';
     };
     type UnitDefault = { premisesAddress?: string; maxOccupants?: number };
 
+    const OCCUPANT_RELATIONSHIPS = [
+      'biological child',
+      'legally adopted child',
+      'spouse or partner',
+      'other family member',
+      'other authorized occupant',
+    ] as const;
+
     const root = document.getElementById('list');
     const status = document.getElementById('lease-status');
     const errors = document.getElementById('lease-errors');
     const submit = document.getElementById('lease-submit') as HTMLButtonElement | null;
     const unitSelect = document.getElementById('unitId') as HTMLSelectElement | null;
     const hint = document.getElementById('unit-hint');
+    const coTenantsHost = document.getElementById('co-tenants');
+    const occupantsHost = document.getElementById('occupants');
     let units: Unit[] = [];
     let people: Person[] = [];
     let unitDefaults: Record<string, UnitDefault> = {};
+    let coTenantCount = 0;
+    let occupantCount = 0;
 
     function dollarsToCents(value: FormDataEntryValue | null) {
       return Math.round(Number(value) * 100);
@@ -113,6 +137,120 @@ import OfficeNav from '../../components/OfficeNav.astro';
       const max = document.getElementById('maxOccupants') as HTMLInputElement | null;
       if (max && defaults.maxOccupants) max.value = String(defaults.maxOccupants);
       if (hint) hint.textContent = defaults.premisesAddress ? `Defaults loaded for ${defaults.premisesAddress}.` : '';
+    }
+
+    function relationshipOptions() {
+      return OCCUPANT_RELATIONSHIPS.map(
+        (value) => `<option value="${value}">${value.charAt(0).toUpperCase()}${value.slice(1)}</option>`,
+      ).join('');
+    }
+
+    function addCoTenantRow() {
+      if (!coTenantsHost) return;
+      if (coTenantCount >= 2) {
+        showErrorBanner(errors, 'This lease supports up to three adult signers, including the primary renter.');
+        return;
+      }
+      clearErrorBanner(errors);
+      coTenantCount += 1;
+      const id = String(coTenantCount);
+      const row = document.createElement('div');
+      row.className = 'rounded-lg border border-line bg-panel p-3';
+      row.dataset.coTenantRow = id;
+      row.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="font-semibold text-pine">Co-tenant ${id}</h3>
+          <button class="btn-ghost remove-co-tenant" type="button" data-row="${id}">Remove</button>
+        </div>
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label for="coTenantName-${id}">Name</label>
+            <input id="coTenantName-${id}" name="coTenantName-${id}" maxlength="200" required />
+          </div>
+          <div>
+            <label for="coTenantEmail-${id}">Email</label>
+            <input id="coTenantEmail-${id}" name="coTenantEmail-${id}" type="email" autocomplete="email" />
+          </div>
+          <div class="md:col-span-2">
+            <label for="coTenantPhone-${id}">Phone</label>
+            <input id="coTenantPhone-${id}" name="coTenantPhone-${id}" type="tel" maxlength="40" autocomplete="tel" />
+            <p class="mt-1 text-xs text-muted">Provide an email or phone number for each co-tenant.</p>
+          </div>
+        </div>
+      `;
+      coTenantsHost.appendChild(row);
+    }
+
+    function addOccupantRow() {
+      if (!occupantsHost) return;
+      clearErrorBanner(errors);
+      occupantCount += 1;
+      const id = String(occupantCount);
+      const row = document.createElement('div');
+      row.className = 'rounded-lg border border-line bg-panel p-3';
+      row.dataset.occupantRow = id;
+      row.innerHTML = `
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="font-semibold text-pine">Additional occupant ${id}</h3>
+          <button class="btn-ghost remove-occupant" type="button" data-row="${id}">Remove</button>
+        </div>
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label for="occupantName-${id}">Name</label>
+            <input id="occupantName-${id}" name="occupantName-${id}" maxlength="200" required />
+          </div>
+          <div>
+            <label for="occupantRelationship-${id}">Relationship to primary renter</label>
+            <select id="occupantRelationship-${id}" name="occupantRelationship-${id}" required>
+              <option value="">Select relationship</option>
+              ${relationshipOptions()}
+            </select>
+          </div>
+        </div>
+      `;
+      occupantsHost.appendChild(row);
+    }
+
+    function readCoTenants() {
+      const rows = Array.from(document.querySelectorAll('[data-co-tenant-row]'));
+      return rows
+        .map((row) => {
+          const id = row.getAttribute('data-co-tenant-row') || '';
+          const displayName = (document.getElementById(`coTenantName-${id}`) as HTMLInputElement | null)?.value.trim() || '';
+          const email = (document.getElementById(`coTenantEmail-${id}`) as HTMLInputElement | null)?.value.trim() || '';
+          const phone = (document.getElementById(`coTenantPhone-${id}`) as HTMLInputElement | null)?.value.trim() || '';
+          return { displayName, email, phone };
+        })
+        .filter((row) => row.displayName);
+    }
+
+    function readOccupants() {
+      const rows = Array.from(document.querySelectorAll('[data-occupant-row]'));
+      return rows
+        .map((row) => {
+          const id = row.getAttribute('data-occupant-row') || '';
+          const name = (document.getElementById(`occupantName-${id}`) as HTMLInputElement | null)?.value.trim() || '';
+          const relationship =
+            (document.getElementById(`occupantRelationship-${id}`) as HTMLSelectElement | null)?.value.trim() || '';
+          return { name, relationship };
+        })
+        .filter((row) => row.name);
+    }
+
+    function validateHousehold() {
+      for (const row of readCoTenants()) {
+        if (!row.email && !row.phone) {
+          showErrorBanner(errors, `Each co-tenant needs an email address or phone number (${row.displayName}).`);
+          return false;
+        }
+      }
+      for (const row of readOccupants()) {
+        if (!row.relationship) {
+          showErrorBanner(errors, `Choose a relationship for ${row.name}.`);
+          return false;
+        }
+      }
+      return true;
     }
 
     async function load() {
@@ -163,12 +301,21 @@ import OfficeNav from '../../components/OfficeNav.astro';
     }
 
     unitSelect?.addEventListener('change', applyUnitDefaults);
-    document.getElementById('personName')?.addEventListener('input', (event) => {
-      const names = document.getElementById('tenantNames') as HTMLTextAreaElement | null;
-      const occupants = document.getElementById('authorizedOccupants') as HTMLTextAreaElement | null;
-      const value = (event.target as HTMLInputElement).value;
-      if (names && !names.value) names.value = value;
-      if (occupants && !occupants.value) occupants.value = value;
+    document.getElementById('add-co-tenant')?.addEventListener('click', addCoTenantRow);
+    document.getElementById('add-occupant')?.addEventListener('click', addOccupantRow);
+    coTenantsHost?.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.classList.contains('remove-co-tenant')) return;
+      const row = target.closest('[data-co-tenant-row]');
+      row?.remove();
+      coTenantCount = document.querySelectorAll('[data-co-tenant-row]').length;
+    });
+    occupantsHost?.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.classList.contains('remove-occupant')) return;
+      const row = target.closest('[data-occupant-row]');
+      row?.remove();
+      occupantCount = document.querySelectorAll('[data-occupant-row]').length;
     });
 
     document.getElementById('lease-form')?.addEventListener('submit', async (event) => {
@@ -176,6 +323,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
       const form = event.target as HTMLFormElement;
       const data = new FormData(form);
       clearErrorBanner(errors);
+      if (!validateHousehold()) return;
+      const coTenants = readCoTenants();
+      const additionalOccupants = readOccupants();
       setButtonBusy(submit, true, 'Preparing…');
       try {
         const res = await fetch('/api/office/leases', {
@@ -185,12 +335,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
             unitId: data.get('unitId'),
             personEmail: data.get('personEmail'),
             personName: data.get('personName'),
+            personPhone: data.get('personPhone'),
             startDate: data.get('startDate'),
             endDate: data.get('endDate'),
             rentCents: dollarsToCents(data.get('rentDollars')),
+            coTenants: coTenants.length ? coTenants : undefined,
+            additionalOccupants: additionalOccupants.length ? additionalOccupants : undefined,
             terms: {
-              tenantNames: String(data.get('tenantNames') || ''),
-              authorizedOccupants: String(data.get('authorizedOccupants') || ''),
               maxOccupants: Number(data.get('maxOccupants')),
               securityDepositCents: dollarsToCents(data.get('depositDollars')),
               petCount: Number(data.get('petCount')),

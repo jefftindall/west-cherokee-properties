@@ -173,6 +173,25 @@ export function normalizeLeaseTerms(input = {}) {
   return {
     tenantNames,
     authorizedOccupants: String(input.authorizedOccupants || tenantNames.join('\n')).trim(),
+    coTenants: Array.isArray(input.coTenants)
+      ? input.coTenants
+          .map((row) => ({
+            personId: String(row?.personId || '').trim() || undefined,
+            displayName: String(row?.displayName || '').trim(),
+            email: String(row?.email || '').trim(),
+            emailKey: String(row?.emailKey || '').trim(),
+            phone: String(row?.phone || '').trim(),
+          }))
+          .filter((row) => row.displayName)
+      : undefined,
+    additionalOccupants: Array.isArray(input.additionalOccupants)
+      ? input.additionalOccupants
+          .map((row) => ({
+            name: String(row?.name || '').trim(),
+            relationship: String(row?.relationship || '').trim(),
+          }))
+          .filter((row) => row.name && row.relationship)
+      : undefined,
     maxOccupants: Number.isInteger(maxOccupants) && maxOccupants >= 1 ? maxOccupants : undefined,
     securityDepositCents: Number.isInteger(securityDepositCents) && securityDepositCents > 0 ? securityDepositCents : undefined,
     petCount: Number.isInteger(petCount) && petCount >= 0 ? petCount : 0,

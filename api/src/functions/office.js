@@ -7,6 +7,7 @@ import { defaultTermsForUnit, monthlyChargeCents, UNIT_LEASE_DEFAULTS } from '..
 import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
+import { buildHouseholdLeaseTerms, normalizeAdditionalOccupant, normalizeCoTenant, OCCUPANT_RELATIONSHIPS } from '../lib/household.js';
 import { getStore } from '../lib/store.js';
 import { buildDashboard } from '../lib/unitHealth.js';
 import {
@@ -14,6 +15,53 @@ import {
   rentPaymentsEnabled,
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
+
+const householdContactSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(200),
+    email: z.string().trim().max(320).optional(),
+    phone: z.string().trim().max(40).optional(),
+  })
+  .refine((value) => Boolean(String(value.email || '').trim() || String(value.phone || '').trim()), {
+    message: 'Each co-tenant needs an email address or phone number.',
+  });
+
+const additionalOccupantSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  relationship: z.enum(OCCUPANT_RELATIONSHIPS),
+});
+
+async function createLeaseFromHousehold(store, body) {
+  const primaryName = String(body.personName || '').trim() || body.personEmail;
+  const coTenants = [];
+  for (const row of body.coTenants || []) {
+    const normalized = normalizeCoTenant(row);
+    const person = await store.upsertPerson({
+      displayName: normalized.displayName,
+      email: normalized.email,
+      phone: normalized.phone,
+    });
+    coTenants.push({ ...normalized, personId: person.id });
+  }
+  const additionalOccupants = (body.additionalOccupants || []).map((row) =>
+    normalizeAdditionalOccupant(row, primaryName),
+  );
+  const householdTerms = buildHouseholdLeaseTerms({ primaryName, coTenants, additionalOccupants });
+  const person = await store.upsertPerson({
+    displayName: primaryName,
+    email: body.personEmail,
+    phone: body.personPhone || '',
+  });
+  const terms = defaultTermsForUnit(body.unitId, {
+    ...body.terms,
+    ...householdTerms,
+    rentCents: body.rentCents,
+    startDate: body.startDate,
+    displayName: person.displayName,
+  });
+  const lease = await store.createLease({ ...body, personId: person.id, terms });
+  return { lease, person, coTenants };
+}
 
 // SWA-linked Functions use authLevel 'anonymous' so Easy Auth can inject x-ms-client-principal.
 // Office authorization is enforced in officeCaller / permissionGate, not by the Functions key.
@@ -177,9 +225,12 @@ app.http('officeLeasesPost', {
         unitId: z.string().min(1),
         personEmail: z.email(),
         personName: z.string().trim().max(200).optional(),
+        personPhone: z.string().trim().max(40).optional(),
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
+        coTenants: z.array(householdContactSchema).max(2).optional(),
+        additionalOccupants: z.array(additionalOccupantSchema).max(10).optional(),
         terms: z
           .object({
             tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
@@ -196,20 +247,7 @@ app.http('officeLeasesPost', {
       })
       .parse(await request.json());
     const store = getStore();
-    const firstTenantName = Array.isArray(body.terms?.tenantNames)
-      ? body.terms.tenantNames[0]
-      : body.terms?.tenantNames;
-    const person = await store.upsertPerson({
-      displayName: body.personName || firstTenantName || body.personEmail,
-      email: body.personEmail,
-    });
-    const terms = defaultTermsForUnit(body.unitId, {
-      ...body.terms,
-      rentCents: body.rentCents,
-      startDate: body.startDate,
-      displayName: person.displayName,
-    });
-    const lease = await store.createLease({ ...body, personId: person.id, terms });
+    const { lease } = await createLeaseFromHousehold(store, body);
     return jsonOk({ lease }, 201);
   }),
 });
