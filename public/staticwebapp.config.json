@@ -29,6 +29,12 @@
       "headers": { "Cache-Control": "private, no-store" }
     },
     {
+      "route": "/office/leases/lease-*",
+      "rewrite": "/office/lease-document",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
       "route": "/office/*",
       "allowedRoles": ["authenticated"],
       "headers": { "Cache-Control": "private, no-store" }
