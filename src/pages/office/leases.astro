@@ -8,20 +8,47 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Leases</h1>
     <p class="mt-2 text-muted">
-      Prepare the Georgia lease here, print it, and sign in person. Office and the renter can both download the current copy. Pets are $20 each per month.
+      Record current leases for occupied units, or prepare a new Georgia lease to print and sign in person. Pets are $20 each per month.
     </p>
     <form id="lease-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <input type="hidden" id="leaseId" name="leaseId" value="" />
+      <div class="md:col-span-2">
+        <fieldset class="flex flex-wrap gap-4 text-sm">
+          <legend class="sr-only">Renter source</legend>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="renterSource" value="existing" />
+            Existing renter
+          </label>
+          <label class="flex items-center gap-2">
+            <input type="radio" name="renterSource" value="new" checked />
+            New renter
+          </label>
+        </fieldset>
+      </div>
+      <div id="existing-renter-field" class="hidden md:col-span-2">
+        <label for="personId">Renter</label>
+        <select id="personId" name="personId"></select>
+      </div>
+      <div id="new-renter-fields" class="contents">
+        <div>
+          <label for="personName">Primary renter name</label>
+          <input id="personName" name="personName" maxlength="200" autocomplete="name" />
+        </div>
+        <div>
+          <label for="personEmail">Renter email</label>
+          <input id="personEmail" name="personEmail" type="email" autocomplete="email" />
+        </div>
+      </div>
       <div>
         <label for="unitId">Unit</label>
         <select id="unitId" name="unitId" required></select>
       </div>
       <div>
-        <label for="personName">Primary renter name</label>
-        <input id="personName" name="personName" required maxlength="200" autocomplete="name" />
-      </div>
-      <div>
-        <label for="personEmail">Renter email</label>
-        <input id="personEmail" name="personEmail" type="email" required autocomplete="email" />
+        <label for="leaseStatus">Lease status</label>
+        <select id="leaseStatus" name="leaseStatus">
+          <option value="active" selected>Active (current tenant)</option>
+          <option value="ended">Ended (historical record)</option>
+        </select>
       </div>
       <div>
         <label for="tenantNames">All adult tenant names (one per line)</label>
@@ -64,22 +91,15 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <textarea id="additionalProvisions" name="additionalProvisions" rows="2">None.</textarea>
       </div>
       <p id="unit-hint" class="md:col-span-2 text-sm text-muted"></p>
-      <div class="flex items-end">
-        <button id="lease-submit" class="btn-primary" type="submit">Prepare lease</button>
+      <div class="flex flex-wrap items-end gap-3">
+        <button class="btn-primary" type="submit" id="save-btn">Create lease</button>
+        <button class="btn-ghost hidden" type="button" id="cancel-btn">Cancel edit</button>
       </div>
     </form>
-    <div id="lease-errors" class="mt-2"></div>
     <p id="lease-status" class="mt-2 text-sm text-muted" role="status"></p>
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
-    import {
-      clearErrorBanner,
-      clearLoading,
-      renderLoading,
-      setButtonBusy,
-      showErrorBanner,
-    } from '../../lib/uiFeedback.ts';
     type Unit = { id: string; label: string; propertyId: string };
     type Person = { id: string; displayName: string; email: string };
     type Lease = {
@@ -90,22 +110,59 @@ import OfficeNav from '../../components/OfficeNav.astro';
       rentCents: number;
       startDate: string;
       endDate: string;
-      terms?: { petCount?: number };
+      terms?: {
+        petCount?: number;
+        tenantNames?: string | string[];
+        authorizedOccupants?: string;
+        maxOccupants?: number;
+        securityDepositCents?: number;
+        approvedPets?: string;
+        additionalProvisions?: string;
+      };
     };
     type UnitDefault = { premisesAddress?: string; maxOccupants?: number };
 
     const root = document.getElementById('list');
     const status = document.getElementById('lease-status');
-    const errors = document.getElementById('lease-errors');
-    const submit = document.getElementById('lease-submit') as HTMLButtonElement | null;
+    const form = document.getElementById('lease-form') as HTMLFormElement | null;
+    const leaseIdInput = document.getElementById('leaseId') as HTMLInputElement | null;
     const unitSelect = document.getElementById('unitId') as HTMLSelectElement | null;
+    const personSelect = document.getElementById('personId') as HTMLSelectElement | null;
+    const existingRenterField = document.getElementById('existing-renter-field');
+    const newRenterFields = document.getElementById('new-renter-fields');
+    const saveBtn = document.getElementById('save-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
     const hint = document.getElementById('unit-hint');
+    const leaseStatusSelect = document.getElementById('leaseStatus') as HTMLSelectElement | null;
+
     let units: Unit[] = [];
     let people: Person[] = [];
     let unitDefaults: Record<string, UnitDefault> = {};
+    let leases: Lease[] = [];
 
     function dollarsToCents(value: FormDataEntryValue | null) {
       return Math.round(Number(value) * 100);
+    }
+
+    function centsToDollars(cents: number) {
+      return (cents / 100).toFixed(2);
+    }
+
+    function tenantNamesText(terms?: Lease['terms']) {
+      const names = terms?.tenantNames;
+      if (Array.isArray(names)) return names.join('\n');
+      return String(names || '');
+    }
+
+    function setRenterSource(source: 'existing' | 'new') {
+      const existing = source === 'existing';
+      existingRenterField?.classList.toggle('hidden', !existing);
+      newRenterFields?.classList.toggle('hidden', existing);
+      const personName = document.getElementById('personName') as HTMLInputElement | null;
+      const personEmail = document.getElementById('personEmail') as HTMLInputElement | null;
+      if (personName) personName.required = !existing;
+      if (personEmail) personEmail.required = !existing;
+      if (personSelect) personSelect.required = existing;
     }
 
     function applyUnitDefaults() {
@@ -115,52 +172,148 @@ import OfficeNav from '../../components/OfficeNav.astro';
       if (hint) hint.textContent = defaults.premisesAddress ? `Defaults loaded for ${defaults.premisesAddress}.` : '';
     }
 
+    function populatePeopleSelect(selectedId = '') {
+      if (!personSelect) return;
+      personSelect.innerHTML = people.length
+        ? people.map((p) => `<option value="${p.id}">${p.displayName} · ${p.email}</option>`).join('')
+        : '<option value="">Add renters first</option>';
+      if (selectedId) personSelect.value = selectedId;
+    }
+
+    function resetForm() {
+      form?.reset();
+      if (leaseIdInput) leaseIdInput.value = '';
+      if (saveBtn) saveBtn.textContent = 'Create lease';
+      cancelBtn?.classList.add('hidden');
+      if (leaseStatusSelect) leaseStatusSelect.disabled = false;
+      form?.querySelectorAll('input[name="renterSource"]').forEach((input) => {
+        (input as HTMLInputElement).disabled = false;
+      });
+      setRenterSource('new');
+      if (status) status.textContent = '';
+      applyUnitDefaults();
+    }
+
+    function fillFormFromLease(lease: Lease) {
+      const person = people.find((row) => row.id === lease.personId);
+      if (leaseIdInput) leaseIdInput.value = lease.id;
+      if (unitSelect) unitSelect.value = lease.unitId;
+      if (leaseStatusSelect) {
+        leaseStatusSelect.value = lease.status;
+        leaseStatusSelect.disabled = true;
+      }
+      form?.querySelectorAll('input[name="renterSource"]').forEach((input) => {
+        (input as HTMLInputElement).disabled = true;
+      });
+      if (person) {
+        const existingRadio = form?.querySelector('input[name="renterSource"][value="existing"]') as HTMLInputElement | null;
+        if (existingRadio) existingRadio.checked = true;
+        setRenterSource('existing');
+        populatePeopleSelect(person.id);
+      }
+      (document.getElementById('tenantNames') as HTMLTextAreaElement).value = tenantNamesText(lease.terms);
+      (document.getElementById('startDate') as HTMLInputElement).value = lease.startDate;
+      (document.getElementById('endDate') as HTMLInputElement).value = lease.endDate;
+      (document.getElementById('rentDollars') as HTMLInputElement).value = centsToDollars(lease.rentCents);
+      (document.getElementById('depositDollars') as HTMLInputElement).value = centsToDollars(
+        lease.terms?.securityDepositCents || lease.rentCents,
+      );
+      (document.getElementById('maxOccupants') as HTMLInputElement).value = String(lease.terms?.maxOccupants || 2);
+      (document.getElementById('authorizedOccupants') as HTMLTextAreaElement).value =
+        lease.terms?.authorizedOccupants || '';
+      (document.getElementById('petCount') as HTMLInputElement).value = String(lease.terms?.petCount || 0);
+      (document.getElementById('approvedPets') as HTMLInputElement).value = lease.terms?.approvedPets || 'None';
+      (document.getElementById('additionalProvisions') as HTMLTextAreaElement).value =
+        lease.terms?.additionalProvisions || 'None.';
+      if (saveBtn) saveBtn.textContent = 'Save changes';
+      cancelBtn?.classList.remove('hidden');
+      if (status) status.textContent = `Editing lease for ${unitDefaults[lease.unitId]?.premisesAddress || lease.unitId}.`;
+      form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function endLease(lease: Lease) {
+      if (!window.confirm(`End the active lease for ${unitDefaults[lease.unitId]?.premisesAddress || lease.unitId}?`)) return;
+      const res = await fetch(`/api/office/leases/${lease.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ended' }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) status.textContent = res.ok ? 'Lease ended.' : json.error || 'Could not end lease.';
+      if (res.ok) load();
+    }
+
     async function load() {
-      renderLoading(root, 'Loading leases…', { block: true });
-      try {
-        const res = await fetch('/api/office/leases');
-        const json = await res.json().catch(() => ({}));
-        clearLoading(root);
-        if (!root) return;
-        if (!res.ok) {
-          showErrorBanner(errors, json.error || 'Could not load leases.');
-          return;
-        }
-        units = json.units || [];
-        people = json.people || [];
-        unitDefaults = json.unitDefaults || {};
-        if (unitSelect && !unitSelect.options.length) {
-          unitSelect.innerHTML = units
-            .map((unit) => {
-              const address = unitDefaults[unit.id]?.premisesAddress || unit.id;
-              return `<option value="${unit.id}">${address}</option>`;
-            })
-            .join('');
-          applyUnitDefaults();
-        }
-        const rows: Lease[] = json.leases || [];
-        root.innerHTML = rows.length
-          ? `<ul class="space-y-3">${rows
-              .map((lease) => {
-                const person = people.find((row) => row.id === lease.personId);
-                const address = unitDefaults[lease.unitId]?.premisesAddress || lease.unitId;
-                const pets = lease.terms?.petCount || 0;
-                return `<li class="rounded-lg border border-line bg-panel p-4">
+      const res = await fetch('/api/office/leases');
+      const json = await res.json().catch(() => ({}));
+      if (!root) return;
+      if (!res.ok) {
+        root.textContent = json.error || 'Could not load leases.';
+        return;
+      }
+      units = json.units || [];
+      people = json.people || [];
+      unitDefaults = json.unitDefaults || {};
+      leases = json.leases || [];
+      if (unitSelect && !unitSelect.options.length) {
+        unitSelect.innerHTML = units
+          .map((unit) => {
+            const address = unitDefaults[unit.id]?.premisesAddress || unit.id;
+            return `<option value="${unit.id}">${address}</option>`;
+          })
+          .join('');
+        applyUnitDefaults();
+      }
+      populatePeopleSelect();
+      const preselectedPerson = new URLSearchParams(window.location.search).get('personId');
+      if (preselectedPerson && people.some((p) => p.id === preselectedPerson)) {
+        const existingRadio = form?.querySelector('input[name="renterSource"][value="existing"]') as HTMLInputElement | null;
+        if (existingRadio) existingRadio.checked = true;
+        setRenterSource('existing');
+        populatePeopleSelect(preselectedPerson);
+      }
+      root.innerHTML = leases.length
+        ? `<ul class="space-y-3">${leases
+            .map((lease) => {
+              const person = people.find((row) => row.id === lease.personId);
+              const address = unitDefaults[lease.unitId]?.premisesAddress || lease.unitId;
+              const pets = lease.terms?.petCount || 0;
+              return `<li class="rounded-lg border border-line bg-panel p-4">
                 <div class="font-semibold text-pine">${address}</div>
-                <div class="text-muted">${person?.displayName || lease.personId} · ${lease.status} · $${(lease.rentCents / 100).toFixed(2)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
+                <div class="text-muted">${person?.displayName || lease.personId} · ${lease.status} · ${lease.startDate} – ${lease.endDate} · $${(lease.rentCents / 100).toFixed(2)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
                 <div class="mt-2 flex flex-wrap gap-3">
                   <a class="btn-ghost" href="/office/leases/${lease.id}">View / print</a>
                   <a class="btn-ghost" href="/api/office/leases/${lease.id}/document?download=1">Download</a>
+                  <button type="button" class="btn-ghost" data-edit="${lease.id}">Edit</button>
+                  ${lease.status === 'active' ? `<button type="button" class="btn-secondary px-2 py-1 text-xs" data-end="${lease.id}">End lease</button>` : ''}
                 </div>
               </li>`;
-              })
-              .join('')}</ul>`
-          : 'No leases yet.';
-      } catch {
-        clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
-      }
+            })
+            .join('')}</ul>`
+        : 'No leases yet.';
+      const byId = new Map(leases.map((lease) => [lease.id, lease]));
+      root.querySelectorAll('button[data-edit]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = (btn as HTMLButtonElement).dataset.edit;
+          const lease = id ? byId.get(id) : null;
+          if (lease) fillFormFromLease(lease);
+        });
+      });
+      root.querySelectorAll('button[data-end]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = (btn as HTMLButtonElement).dataset.end;
+          const lease = id ? byId.get(id) : null;
+          if (lease) endLease(lease);
+        });
+      });
     }
+
+    form?.querySelectorAll('input[name="renterSource"]').forEach((input) => {
+      input.addEventListener('change', (event) => {
+        const value = (event.target as HTMLInputElement).value;
+        setRenterSource(value === 'existing' ? 'existing' : 'new');
+      });
+    });
 
     unitSelect?.addEventListener('change', applyUnitDefaults);
     document.getElementById('personName')?.addEventListener('input', (event) => {
@@ -171,49 +324,69 @@ import OfficeNav from '../../components/OfficeNav.astro';
       if (occupants && !occupants.value) occupants.value = value;
     });
 
-    document.getElementById('lease-form')?.addEventListener('submit', async (event) => {
+    cancelBtn?.addEventListener('click', resetForm);
+
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const form = event.target as HTMLFormElement;
       const data = new FormData(form);
-      clearErrorBanner(errors);
-      setButtonBusy(submit, true, 'Preparing…');
-      try {
-        const res = await fetch('/api/office/leases', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            unitId: data.get('unitId'),
-            personEmail: data.get('personEmail'),
-            personName: data.get('personName'),
+      const editingId = String(data.get('leaseId') || '').trim();
+      const renterSource = String(data.get('renterSource') || 'new');
+      const terms = {
+        tenantNames: String(data.get('tenantNames') || ''),
+        authorizedOccupants: String(data.get('authorizedOccupants') || ''),
+        maxOccupants: Number(data.get('maxOccupants')),
+        securityDepositCents: dollarsToCents(data.get('depositDollars')),
+        petCount: Number(data.get('petCount')),
+        approvedPets: String(data.get('approvedPets') || 'None'),
+        additionalProvisions: String(data.get('additionalProvisions') || 'None.'),
+        effectiveDate: String(data.get('startDate') || ''),
+      };
+      if (status) status.textContent = 'Saving…';
+      const payload = editingId
+        ? {
             startDate: data.get('startDate'),
             endDate: data.get('endDate'),
             rentCents: dollarsToCents(data.get('rentDollars')),
-            terms: {
-              tenantNames: String(data.get('tenantNames') || ''),
-              authorizedOccupants: String(data.get('authorizedOccupants') || ''),
-              maxOccupants: Number(data.get('maxOccupants')),
-              securityDepositCents: dollarsToCents(data.get('depositDollars')),
-              petCount: Number(data.get('petCount')),
-              approvedPets: String(data.get('approvedPets') || 'None'),
-              additionalProvisions: String(data.get('additionalProvisions') || 'None.'),
-              effectiveDate: String(data.get('startDate') || ''),
-            },
-          }),
-        });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          showErrorBanner(errors, json.error || 'Could not create lease.');
-          return;
-        }
-        if (status) status.textContent = 'Lease prepared. Open View / print to sign in person.';
-        if (json.lease?.id) window.location.href = `/office/leases/${json.lease.id}`;
-        else load();
-      } catch {
-        showErrorBanner(errors, 'Could not create lease. Try again.');
-      } finally {
-        setButtonBusy(submit, false);
+            terms,
+          }
+        : {
+            unitId: data.get('unitId'),
+            startDate: data.get('startDate'),
+            endDate: data.get('endDate'),
+            rentCents: dollarsToCents(data.get('rentDollars')),
+            status: data.get('leaseStatus') || 'active',
+            terms,
+            ...(renterSource === 'existing'
+              ? { personId: data.get('personId') }
+              : { personEmail: data.get('personEmail'), personName: data.get('personName') }),
+          };
+      const res = await fetch(editingId ? `/api/office/leases/${editingId}` : '/api/office/leases', {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (status) {
+        status.textContent = res.ok
+          ? editingId
+            ? 'Lease updated.'
+            : 'Lease created. Open View / print to sign in person.'
+          : json.error || 'Could not save lease.';
+      }
+      if (res.ok && !editingId && json.lease?.id) {
+        window.location.href = `/office/leases/${json.lease.id}`;
+        return;
+      }
+      if (res.ok) {
+        resetForm();
+        load();
+      } else {
+        load();
       }
     });
-    load();
+
+    load().catch(() => {
+      if (root) root.textContent = 'Office API is not reachable.';
+    });
   </script>
 </BaseLayout>

@@ -154,6 +154,42 @@ app.http('officePeople', {
   }),
 });
 
+app.http('officePeoplePost', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'office/people',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.PEOPLE_WRITE);
+    const body = z
+      .object({
+        displayName: z.string().trim().min(1).max(200),
+        email: z.email(),
+        phone: z.string().trim().max(40).optional(),
+      })
+      .parse(await request.json());
+    const person = await getStore().upsertPerson(body);
+    return jsonOk({ person }, 201);
+  }),
+});
+
+app.http('officePersonPatch', {
+  methods: ['PATCH'],
+  authLevel: 'anonymous',
+  route: 'office/people/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.PEOPLE_WRITE);
+    const body = z
+      .object({
+        displayName: z.string().trim().min(1).max(200).optional(),
+        email: z.email().optional(),
+        phone: z.string().trim().max(40).optional(),
+      })
+      .parse(await request.json());
+    const person = await getStore().updatePerson(request.params.id, body);
+    return jsonOk({ person });
+  }),
+});
+
 app.http('officeLeasesGet', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -175,11 +211,13 @@ app.http('officeLeasesPost', {
     const body = z
       .object({
         unitId: z.string().min(1),
-        personEmail: z.email(),
+        personId: z.string().min(1).optional(),
+        personEmail: z.email().optional(),
         personName: z.string().trim().max(200).optional(),
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
+        status: z.enum(['active', 'ended']).optional(),
         terms: z
           .object({
             tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
@@ -194,22 +232,43 @@ app.http('officeLeasesPost', {
           })
           .optional(),
       })
+      .refine((data) => data.personId || data.personEmail, {
+        message: 'personId or personEmail is required',
+      })
       .parse(await request.json());
     const store = getStore();
     const firstTenantName = Array.isArray(body.terms?.tenantNames)
       ? body.terms.tenantNames[0]
       : body.terms?.tenantNames;
-    const person = await store.upsertPerson({
-      displayName: body.personName || firstTenantName || body.personEmail,
-      email: body.personEmail,
-    });
+    let person;
+    if (body.personId) {
+      person = await store.getPerson(body.personId);
+      if (!person) {
+        const err = new Error('Person not found.');
+        err.name = 'NotFoundError';
+        throw err;
+      }
+    } else {
+      person = await store.upsertPerson({
+        displayName: body.personName || firstTenantName || body.personEmail,
+        email: body.personEmail,
+      });
+    }
     const terms = defaultTermsForUnit(body.unitId, {
       ...body.terms,
       rentCents: body.rentCents,
       startDate: body.startDate,
       displayName: person.displayName,
     });
-    const lease = await store.createLease({ ...body, personId: person.id, terms });
+    const lease = await store.createLease({
+      unitId: body.unitId,
+      personId: person.id,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      rentCents: body.rentCents,
+      status: body.status,
+      terms,
+    });
     return jsonOk({ lease }, 201);
   }),
 });
@@ -243,6 +302,7 @@ app.http('officeLeasePatch', {
         startDate: z.string().min(8).optional(),
         endDate: z.string().min(8).optional(),
         rentCents: z.number().int().positive().optional(),
+        status: z.enum(['active', 'ended']).optional(),
         terms: z
           .object({
             tenantNames: z.union([z.string(), z.array(z.string())]).optional(),
