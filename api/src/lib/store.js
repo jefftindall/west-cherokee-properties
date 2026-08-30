@@ -45,6 +45,7 @@ export function createMemoryStore() {
           email: String(email).trim(),
           emailKey,
           phone: String(phone || '').trim(),
+          stripeCustomerId: '',
         };
         db.people.push(person);
       } else {
@@ -59,6 +60,18 @@ export function createMemoryStore() {
       return clone(db.people.find((p) => p.emailKey === emailKey) || null);
     },
     getPerson: async (id) => clone(db.people.find((p) => p.id === id) || null),
+    async updatePersonStripeCustomerId(id, stripeCustomerId) {
+      const person = db.people.find((p) => p.id === id);
+      if (!person) throw new NotFoundError('Person not found.');
+      person.stripeCustomerId = String(stripeCustomerId || '').trim();
+      return clone(person);
+    },
+    async updateUnit(id, patch) {
+      const unit = db.units.find((u) => u.id === id);
+      if (!unit) throw new NotFoundError('Unit not found.');
+      if (patch.available != null) unit.available = Boolean(patch.available);
+      return clone(unit);
+    },
 
     async createApplication(input) {
       const row = normalizeApplication({ ...input, id: `app-${randomUUID()}`, status: 'submitted' });

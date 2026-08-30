@@ -44,12 +44,13 @@ export function createSqlStore(connectionString) {
         `('${p.id}', '${p.slug}', '${p.title.replaceAll("'", "''")}', '${p.city}', '${p.state}', '${p.address.replaceAll("'", "''")}')`,
     ).join(',\n      ');
     const unitValues = SEEDED_UNITS.map(
-      (u) => `('${u.id}', '${u.propertyId}', '${u.label.replaceAll("'", "''")}', ${u.bedrooms}, ${u.bathrooms})`,
+      (u) =>
+        `('${u.id}', '${u.propertyId}', '${u.label.replaceAll("'", "''")}', ${u.bedrooms}, ${u.bathrooms}, ${u.available ? 1 : 0})`,
     ).join(',\n      ');
     await connected.request().query(`
       INSERT INTO dbo.properties (id, slug, title, city, state, address) VALUES
       ${propertyValues};
-      INSERT INTO dbo.units (id, property_id, label, bedrooms, bathrooms) VALUES
+      INSERT INTO dbo.units (id, property_id, label, bedrooms, bathrooms, available) VALUES
       ${unitValues};
     `);
   }
@@ -66,18 +67,35 @@ export function createSqlStore(connectionString) {
       const req = p.request();
       const result = propertyId
         ? await req.input('propertyId', sql.NVarChar, propertyId).query(
-            'SELECT id, property_id AS propertyId, label, bedrooms, bathrooms FROM dbo.units WHERE property_id = @propertyId',
+            'SELECT id, property_id AS propertyId, label, bedrooms, bathrooms, available FROM dbo.units WHERE property_id = @propertyId',
           )
-        : await req.query('SELECT id, property_id AS propertyId, label, bedrooms, bathrooms FROM dbo.units');
-      return result.recordset;
+        : await req.query(
+            'SELECT id, property_id AS propertyId, label, bedrooms, bathrooms, available FROM dbo.units',
+          );
+      return result.recordset.map((row) => ({ ...row, available: Boolean(row.available) }));
     },
     async getUnit(id) {
       const p = await pool();
       const result = await p
         .request()
         .input('id', sql.NVarChar, id)
-        .query('SELECT id, property_id AS propertyId, label, bedrooms, bathrooms FROM dbo.units WHERE id = @id');
-      return result.recordset[0] || null;
+        .query(
+          'SELECT id, property_id AS propertyId, label, bedrooms, bathrooms, available FROM dbo.units WHERE id = @id',
+        );
+      const row = result.recordset[0] || null;
+      return row ? { ...row, available: Boolean(row.available) } : null;
+    },
+    async updateUnit(id, patch) {
+      const current = await this.getUnit(id);
+      if (!current) throw new NotFoundError('Unit not found.');
+      const available = patch.available != null ? Boolean(patch.available) : current.available;
+      const p = await pool();
+      await p
+        .request()
+        .input('id', sql.NVarChar, id)
+        .input('available', sql.Bit, available ? 1 : 0)
+        .query('UPDATE dbo.units SET available = @available WHERE id = @id');
+      return { ...current, available };
     },
     async upsertPerson({ displayName, email, phone = '' }) {
       const emailKey = String(email || '').trim().toLowerCase();
@@ -87,7 +105,7 @@ export function createSqlStore(connectionString) {
         .request()
         .input('emailKey', sql.NVarChar, emailKey)
         .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone FROM dbo.people WHERE email_key = @emailKey',
+          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE email_key = @emailKey',
         );
       if (existing.recordset[0]) {
         await p
@@ -96,7 +114,7 @@ export function createSqlStore(connectionString) {
           .input('displayName', sql.NVarChar, displayName)
           .input('phone', sql.NVarChar, phone)
           .query('UPDATE dbo.people SET display_name = @displayName, phone = @phone WHERE id = @id');
-        return { ...existing.recordset[0], displayName, phone };
+        return { ...existing.recordset[0], displayName, phone, stripeCustomerId: existing.recordset[0].stripeCustomerId || '' };
       }
       const id = `person-${randomUUID()}`;
       await p
@@ -109,13 +127,15 @@ export function createSqlStore(connectionString) {
         .query(
           'INSERT INTO dbo.people (id, display_name, email, email_key, phone) VALUES (@id, @displayName, @email, @emailKey, @phone)',
         );
-      return { id, displayName, email, emailKey, phone };
+      return { id, displayName, email, emailKey, phone, stripeCustomerId: '' };
     },
     async listPeople() {
       const p = await pool();
       const result = await p
         .request()
-        .query('SELECT id, display_name AS displayName, email, email_key AS emailKey, phone FROM dbo.people');
+        .query(
+          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people',
+        );
       return result.recordset;
     },
     async getPersonByEmail(email) {
@@ -124,7 +144,7 @@ export function createSqlStore(connectionString) {
         .request()
         .input('emailKey', sql.NVarChar, String(email || '').trim().toLowerCase())
         .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone FROM dbo.people WHERE email_key = @emailKey',
+          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE email_key = @emailKey',
         );
       return result.recordset[0] || null;
     },
@@ -133,8 +153,21 @@ export function createSqlStore(connectionString) {
       const result = await p
         .request()
         .input('id', sql.NVarChar, id)
-        .query('SELECT id, display_name AS displayName, email, email_key AS emailKey, phone FROM dbo.people WHERE id = @id');
+        .query(
+          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE id = @id',
+        );
       return result.recordset[0] || null;
+    },
+    async updatePersonStripeCustomerId(id, stripeCustomerId) {
+      const current = await this.getPerson(id);
+      if (!current) throw new NotFoundError('Person not found.');
+      const p = await pool();
+      await p
+        .request()
+        .input('id', sql.NVarChar, id)
+        .input('stripeCustomerId', sql.NVarChar, String(stripeCustomerId || '').trim())
+        .query('UPDATE dbo.people SET stripe_customer_id = @stripeCustomerId WHERE id = @id');
+      return { ...current, stripeCustomerId: String(stripeCustomerId || '').trim() };
     },
     async createApplication(input) {
       const row = normalizeApplication({ ...input, id: `app-${randomUUID()}`, status: 'submitted' });

@@ -24,6 +24,31 @@
       "headers": { "Cache-Control": "private, no-store" }
     },
     {
+      "route": "/api/office/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/api/portal/*",
+      "allowedRoles": ["authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/office/unit",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/office/lease-document",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
+      "route": "/login",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
       "route": "/office",
       "allowedRoles": ["authenticated"],
       "headers": { "Cache-Control": "private, no-store" }
@@ -31,7 +56,7 @@
     {
       "route": "/office/leases/lease-*",
       "rewrite": "/office/lease-document",
-      "allowedRoles": ["authenticated"],
+      "allowedRoles": ["anonymous", "authenticated"],
       "headers": { "Cache-Control": "private, no-store" }
     },
     {

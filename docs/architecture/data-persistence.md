@@ -1,7 +1,7 @@
 # Data persistence
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-29  
+**Last updated:** 2026-08-30  
 **Scope:** Where durable data lives, record shapes, and access paths.
 
 There is **one application database**: Azure SQL (`wcp`). Git holds public brand copy only. Stripe is the money system of record.
@@ -12,8 +12,8 @@ Azure SQL lives in **Central US** (`sql_location = centralus`). East US and East
 
 | Concern | Store | What lives there |
 |---------|-------|------------------|
-| **Public brand** | Git (`src/content/`) | Property listings, about page, per-unit `available` (applications stay closed when false) |
-| **Operations** | Azure SQL | People, applications, leases, invoices, payments, service requests, office users |
+| **Public brand** | Git (`src/content/`) | Property listings, about page; per-unit marketing copy only |
+| **Operations** | Azure SQL | People, applications, leases, invoices, payments, service requests, office users, **unit availability** |
 | **Money** | Stripe | Invoices, charges, receipts |
 | **Secrets** | Key Vault → SWA app settings; shared KV also holds the GitHub App PEM for CI | API keys, SQL connection, External ID, Turnstile, `wcp-terraform` credentials |
 | **Staff identity** | Microsoft Entra (workforce) | Who can complete office login |
@@ -45,8 +45,8 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 
 | Table | Notes |
 |-------|-------|
-| `properties` / `units` | Seeded; public copy still lives in git |
-| `people` | Applicants and renters; unique `email_key` |
+| `properties` / `units` | Seeded; `units.available` gates `/apply` (staff toggles at turnover). Public copy still lives in git. |
+| `people` | Applicants and renters; unique `email_key`; optional `stripe_customer_id` reused for Stripe invoices |
 | `applications` | Status: submitted, in_review, approved, declined, withdrawn |
 | `leases` | Filtered unique index: one **active** lease per unit. `terms_json` holds the filled Georgia lease (occupants, deposit, pets). Office prepares the document; office and the renter download the same current copy. Stripe still invoices monthly charge (dwelling rent + $20/pet). |
 | `invoices` / `payments` | Stripe ids and `receipt_url`; Stripe remains the books |
@@ -57,7 +57,7 @@ Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemor
 
 ## Access paths
 
-- Public apply writes `applications` only when that property has a unit with `available: true` in `api/src/lib/propertySeed.js` (keep in sync with `src/content/properties`). Otherwise `POST /api/apply` returns 400.
+- Public apply writes `applications` only when that property has a unit with `available = true` in Azure SQL (staff sets via `/office/unit?unitId=`). Otherwise `POST /api/apply` returns 400. Keep git marketing copy in sync for display only.
 - A per-property waitlist is planned ([waitlist.md](../plans/waitlist.md)); until then, informal interest goes through contact.
 - Office APIs require catalog permissions.
 - Portal APIs match `people.email_key` to the signed-in email and never return other households' rows. `GET /api/portal/lease/document` is the renter's current filled lease only.

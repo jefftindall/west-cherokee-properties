@@ -30,6 +30,11 @@ BEGIN
   ALTER TABLE dbo.units ADD bathrooms INT NOT NULL CONSTRAINT df_units_bathrooms DEFAULT 1;
 END;
 
+IF COL_LENGTH('dbo.units', 'available') IS NULL
+BEGIN
+  ALTER TABLE dbo.units ADD available BIT NOT NULL CONSTRAINT df_units_available DEFAULT 0;
+END;
+
 IF OBJECT_ID('dbo.people', 'U') IS NULL
 BEGIN
   CREATE TABLE dbo.people (
@@ -37,8 +42,14 @@ BEGIN
     display_name NVARCHAR(200) NOT NULL,
     email NVARCHAR(320) NOT NULL,
     email_key NVARCHAR(320) NOT NULL UNIQUE,
-    phone NVARCHAR(40) NULL
+    phone NVARCHAR(40) NULL,
+    stripe_customer_id NVARCHAR(64) NULL
   );
+END;
+
+IF COL_LENGTH('dbo.people', 'stripe_customer_id') IS NULL
+BEGIN
+  ALTER TABLE dbo.people ADD stripe_customer_id NVARCHAR(64) NULL;
 END;
 
 IF OBJECT_ID('dbo.office_users', 'U') IS NULL

@@ -14,6 +14,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <iframe id="lease-frame" title="Lease document" class="mt-6 min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
   <script>
+    async function ensureOfficeAuth() {
+      const res = await fetch('/api/office/health');
+      if (res.ok) return true;
+      const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?returnUrl=${returnUrl}`;
+      return false;
+    }
+
     const segment = window.location.pathname.split('/').filter(Boolean).pop();
     const id = segment?.startsWith('lease-') ? segment : null;
     const actions = document.getElementById('lease-actions');
@@ -28,9 +36,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
       document.getElementById('print-lease')?.addEventListener('click', () => frame?.contentWindow?.print());
     }
     if (id && frame) {
-      frame.src = `/api/office/leases/${id}/document`;
-      frame.addEventListener('load', () => {
-        if (status) status.textContent = 'Ready to print or download.';
+      ensureOfficeAuth().then((authed) => {
+        if (!authed) return;
+        frame.src = `/api/office/leases/${id}/document`;
+        frame.addEventListener('load', () => {
+          if (status) status.textContent = 'Ready to print or download.';
+        });
       });
     }
   </script>

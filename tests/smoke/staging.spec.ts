@@ -58,4 +58,21 @@ test.describe('public smoke', () => {
     await expectAnonymousAuthRedirect(request, '/office');
     await expectAnonymousAuthRedirect(request, '/portal');
   });
+
+  test('deep-link shells load anonymously on SWA', async ({ request }) => {
+    test.skip(!isStaticWebAppHost(), 'Easy Auth is only enforced on Static Web Apps');
+    test.setTimeout(PROPAGATION_DEADLINE_MS + 30_000);
+    const unitShell = await waitForRequestOk(request, '/office/unit?unitId=unit-124-w-cherokee-a');
+    expect(unitShell.status()).toBeGreaterThanOrEqual(200);
+    expect(unitShell.status()).toBeLessThan(400);
+    const body = await unitShell.text();
+    expect(body).toContain('Manage unit');
+  });
+
+  test('login preserves returnUrl for staff sign-in', async ({ page }) => {
+    const returnUrl = '/office/unit?unitId=unit-124-w-cherokee-a';
+    await waitForOk(page, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+    const href = await page.locator('#staff-login').getAttribute('href');
+    expect(href).toContain(encodeURIComponent(returnUrl));
+  });
 });

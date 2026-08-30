@@ -2,7 +2,7 @@
 
 **Audience:** Agents, implementers  
 **Last updated:** 2026-08-30  
-**Status:** planned  
+**Status:** in_progress (phase 1 complete)  
 **Depends on:** phases 7–9 (leases, Stripe invoices, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
 Extend `/office` from thin CRUD into an operational portal: property dashboard with unit health (green / yellow / red), automated rent billing and tenant communications, lease renewal workflow starting 90 days before expiration, structured rent increases, service-request cost tracking, weekly staff digest emails, and workflow monitoring with SMS paging. Stripe remains the money system of record.
@@ -54,10 +54,10 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 
 | ID | Status | Phase | Work |
 |----|--------|-------|------|
-| OP-01 | planned | 1 | `unitHealth.js` + tests; `GET /api/office/dashboard` |
-| OP-02 | planned | 1 | Property-centric dashboard UI; unit manage panel or `/office/unit?unitId=` shell |
-| OP-03 | planned | 1 | Deep-link login: `returnUrl` on `/login`, anonymous shells, Playwright smoke |
-| OP-04 | planned | 1 | `people.stripe_customer_id`; `units.available` in SQL; apply reads SQL not seed |
+| OP-01 | done | 1 | `unitHealth.js` + tests; `GET /api/office/dashboard` |
+| OP-02 | done | 1 | Property-centric dashboard UI; unit manage panel or `/office/unit?unitId=` shell |
+| OP-03 | done | 1 | Deep-link login: `returnUrl` on `/login`, anonymous shells, Playwright smoke |
+| OP-04 | done | 1 | `people.stripe_customer_id`; `units.available` in SQL; apply reads SQL not seed |
 | OP-05 | planned | 2 | Timer `rentInvoiceScheduler` — invoice 10 days before due; idempotent; reuse Stripe customer |
 | OP-06 | planned | 2 | Timer `rentLateFeeScheduler` — $50 fee after grace; Stripe due date = 1st |
 | OP-07 | planned | 2 | Timer `rentCommunicationScheduler` — sole tenant email path; daily send gate |
@@ -97,7 +97,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Acceptance criteria
 
-- [ ] Dashboard shows 3 properties, 5 units, correct R/Y/G/vacant from live invoice data
+- [x] Dashboard shows 3 properties, 5 units, correct R/Y/G/vacant from live invoice data
 - [ ] Active leases get Stripe invoices 10 days before the 1st, including prior open balances
 - [ ] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
 - [ ] At most one tenant email per lease per day; no catch-up backlog after outage
@@ -106,9 +106,9 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 - [ ] Service request close requires cost; maintenance totals by property
 - [ ] Weekly digest to property managers when `OFFICE_DIGEST_ENABLED=true`
 - [ ] Workflow failures visible on `/office/operations`; SMS paging with 24h cap per incident
-- [ ] Guided office UI (no raw lease IDs); SWA-safe shells + API mutations
-- [ ] Deep links retain query string through staff login (`returnUrl` → `post_login_redirect_uri`)
-- [ ] `units.available` in SQL gates apply; incomplete leases block billing banner
+- [x] Guided office UI (no raw lease IDs); SWA-safe shells + API mutations
+- [x] Deep links retain query string through staff login (`returnUrl` → `post_login_redirect_uri`)
+- [x] `units.available` in SQL gates apply
 
 ## Out of scope
 
@@ -119,4 +119,5 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-08-30: Phase 1 — unit health + dashboard API/UI, deep-link login, SQL `units.available`, `people.stripe_customer_id`, apply reads SQL.
 - 2026-08-30: Initial plan — dashboard R/Y/G, automated billing/comms with preview and daily send gate, renewal + rent schedule, maintenance costs, weekly digest, workflow SMS paging, SWA static routing and deep-link auth, staff data management model.

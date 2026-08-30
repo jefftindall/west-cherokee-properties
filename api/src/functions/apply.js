@@ -40,7 +40,7 @@ app.http('apply', {
       if (!properties.some((p) => p.slug === parsed.data.propertySlug)) {
         throw new ValidationError('Unknown community.');
       }
-      if (!propertyAcceptsApplications(parsed.data.propertySlug)) {
+      if (!(await propertyAcceptsApplications(store, parsed.data.propertySlug))) {
         throw new ValidationError('This home is not accepting applications right now.');
       }
       const application = await store.createApplication(parsed.data);

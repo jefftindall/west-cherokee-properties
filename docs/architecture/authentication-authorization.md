@@ -26,6 +26,18 @@ flowchart LR
 
 Staff are never authorized because they signed in. Renters are never added to the workforce tenant.
 
+## Azure Functions authLevel
+
+Office and portal handlers register with `authLevel: 'anonymous'`. That is required for SWA-linked APIs: Easy Auth runs at the SWA edge and forwards `x-ms-client-principal` to Functions. Authorization is **not** absent — it lives in application code:
+
+| Surface | Gate |
+|---------|------|
+| SWA edge | `/api/office/*` and `/api/portal/*` require the `authenticated` role; public routes (`/api/apply`, contact, Stripe webhook) are listed explicitly |
+| Office API | `officeCaller` requires a workforce (`aad`) principal plus an active `office_users` profile (or allowlist bootstrap); `permissionGate` checks catalog permissions |
+| Portal API | `portalCaller` requires a signed-in renter email and scopes queries to that household |
+
+Direct calls to the Function host without a principal receive **401**; resident portal sign-in receives **403** on office routes.
+
 ## Public exceptions
 
 | Route | Proof |
