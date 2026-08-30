@@ -3,6 +3,7 @@ import {
   expectAnonymousAuthRedirect,
   expectsStagingNoIndex,
   isStaticWebAppHost,
+  PROPAGATION_DEADLINE_MS,
   waitForOk,
   waitForRequestOk,
 } from '../helpers/propagation';
@@ -53,6 +54,7 @@ test.describe('public smoke', () => {
 
   test('anonymous office and portal redirect on SWA', async ({ request }) => {
     test.skip(!isStaticWebAppHost(), 'Easy Auth is only enforced on Static Web Apps');
+    test.setTimeout(PROPAGATION_DEADLINE_MS + 30_000);
     await expectAnonymousAuthRedirect(request, '/office');
     await expectAnonymousAuthRedirect(request, '/portal');
   });

@@ -10,7 +10,7 @@
 | Smoke | After staging (and prod) deploy | `npm run test:smoke` |
 | Journeys | After staging smoke | `npm run test:journey` |
 
-Smoke covers public routes, robots/sitemap, and anonymous `/office` + `/portal` redirects on SWA hosts.
+Smoke covers public routes, robots/sitemap, and anonymous `/office` + `/portal` redirects on SWA hosts (follows a same-path custom-domain hop from `*.azurestaticapps.net`, then expects `/login` or `/.auth/login`).
 
 Journeys cover the visitor path: home → properties → a leased home (maps / Zillow links, no apply CTA) → contact.
 
