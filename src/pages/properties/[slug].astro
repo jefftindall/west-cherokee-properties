@@ -6,7 +6,7 @@ import PropertyLinks from '../../components/PropertyLinks.astro';
 import { getCollection, render } from 'astro:content';
 import { formatFloorPlan } from '../../lib/units';
 import { neighborhoodPath } from '../../lib/neighborhoods';
-import { mapsEmbedUrl, propertyHasVacancy, unitIsAvailable } from '../../lib/properties';
+import { propertyHasVacancy, unitIsAvailable } from '../../lib/properties';
 
 export async function getStaticPaths() {
   const properties = await getCollection('properties');
@@ -19,7 +19,6 @@ export async function getStaticPaths() {
 const { property } = Astro.props;
 const { Content } = await render(property);
 const vacant = propertyHasVacancy(property);
-const mapSrc = mapsEmbedUrl(property.data.address);
 ---
 
 <BaseLayout
@@ -61,17 +60,6 @@ const mapSrc = mapsEmbedUrl(property.data.address);
         </p>
       )
     }
-
-    <figure class="mt-8 overflow-hidden rounded-xl border border-line bg-panel">
-      <iframe
-        class="h-64 w-full border-0 md:h-80"
-        src={mapSrc}
-        title={`Map of ${property.data.title}`}
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade"
-        allowfullscreen
-      ></iframe>
-    </figure>
 
     <h2 class="mt-10 text-sm font-semibold uppercase tracking-wide text-grove">Units</h2>
     <ul class="mt-3 space-y-1 text-lg text-ink">

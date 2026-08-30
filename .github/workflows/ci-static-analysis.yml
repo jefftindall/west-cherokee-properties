@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -153,6 +150,9 @@ jobs:
     needs: [terraform_lint, changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.infra == 'true' && vars.AZURE_TF_CLIENT_ID != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -161,12 +161,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Azure login (OIDC)
         uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_TF_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TF_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+
+      # workflow GITHUB_TOKEN cannot read Actions env vars/secrets (403). Mint a
+      # short-lived installation token from kv-wcp-shared instead of a PAT.
+      - name: Mint GitHub App token
+        id: gh_app
+        env:
+          GH_APP_ID: ${{ vars.GH_APP_ID }}
+          GH_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+        run: bash scripts/mint-github-app-token.sh --from-keyvault kv-wcp-shared --github-output
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -180,6 +194,7 @@ jobs:
           ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
           ARM_TENANT_ID: ${{ vars.AZURE_TF_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+          GITHUB_TOKEN: ${{ steps.gh_app.outputs.token }}
         run: |
           terraform init -input=false
           terraform plan -input=false -no-color -out=tfplan

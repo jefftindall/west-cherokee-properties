@@ -76,6 +76,19 @@ Terraform `lifecycle.ignore_changes = [value]` on these secrets: vault updates s
 | `EXTERNAL-ID-CLIENT-SECRET` | External ID app → new client secret | `--file` into `kv-wcp-shared` |
 | `STRIPE-TEST-SECRET-KEY` | Stripe Dashboard (test) → roll restricted key | `--file` into `kv-wcp-shared` |
 | `STRIPE-LIVE-SECRET-KEY` | Stripe Dashboard (live) → roll restricted key | `--file` into `kv-wcp-shared` |
+| `GITHUB-APP-ID` | GitHub App `wcp-terraform` → App ID | `node scripts/register-wcp-github-app.mjs` (or `--file` if importing) |
+| `GITHUB-APP-INSTALLATION-ID` | App install on this repo | same register script |
+| `GITHUB-APP-PRIVATE-KEY` | App → Generate a private key | `--file` into `kv-wcp-shared` (never print the PEM) |
+
+### GitHub App (`wcp-terraform`)
+
+CI mints a short-lived installation token from `GITHUB-APP-PRIVATE-KEY`. Generating a new key does **not** need an env-stack apply (plan downloads the PEM at job time).
+
+1. GitHub → Settings → Developer settings → GitHub Apps → `wcp-terraform` → Generate a private key.
+2. Write the downloaded PEM into a 0600 file (do not `cat` it) and `--file` into `GITHUB-APP-PRIVATE-KEY` on `kv-wcp-shared`.
+3. Revoke the old key in the GitHub UI. App id and installation id stay the same.
+
+To recreate the whole app, re-run `node scripts/register-wcp-github-app.mjs` after bootstrap placeholders exist.
 
 After `TURNSTILE-SECRET-KEY`, `ACS-*`, `ALLOWED-USER-IDS`, External ID, or Stripe keys change, re-apply the env stacks so SWA `app_settings` pick them up (those values are interpolated at apply time):
 

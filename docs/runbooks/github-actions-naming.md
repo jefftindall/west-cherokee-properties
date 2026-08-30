@@ -15,7 +15,7 @@ Display `name:` pattern: `"<Area>: <purpose>"`
 
 | File | Display `name:` | Trigger |
 |------|-----------------|---------|
-| `ci-static-analysis.yml` | `CI: static analysis` | PR + push `main` |
+| `ci-static-analysis.yml` | `CI: static analysis` | pull request to `main` |
 | `cd-main.yml` | `CD: main` | push `main` + dispatch |
 | `maint-enable-auto-merge.yml` | `Maint: enable auto-merge` | PR opened / ready / reopened |
 

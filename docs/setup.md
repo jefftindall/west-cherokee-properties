@@ -13,7 +13,7 @@ Provision Azure with Terraform (bootstrap + staging/prod), connect GitHub, store
 - A separate **Entra External ID** (CIAM) tenant for renters — never invite renters as B2B guests in the office tenant
 - Stripe account (test keys first)
 - Cloudflare Turnstile site + secret
-- `gh` CLI if Terraform should write Actions variables
+- `gh` CLI if Terraform should write Actions variables. Local bootstrap apply still needs `export GH_TOKEN="$(gh auth token)"`. CI plan mints a short-lived GitHub App installation token from `kv-wcp-shared` (the workflow `GITHUB_TOKEN` cannot read Actions environment variables/secrets — `403 Resource not accessible by integration`).
 
 ## Layout
 
@@ -21,7 +21,7 @@ Provision Azure with Terraform (bootstrap + staging/prod), connect GitHub, store
 |------|---------|
 | `infra/bootstrap` | Remote state + shared KV + Terraform OIDC (local state, East US 2) |
 | `infra/environments/staging` | Staging SWA + env KV (`create_sql` is false until Azure SQL quota is available) |
-| `infra/environments/prod` | Production stack |
+| `infra/environments/prod` | Production SWA + env KV (`create_sql` is false until Azure SQL quota is available) |
 | `infra/modules/site` | Shared module |
 
 Names use the `wcp` prefix so they never collide with other projects on the same subscription.
@@ -37,6 +37,26 @@ terraform apply tfplan
 ```
 
 Replace `REPLACE_ME` secrets in `kv-wcp-shared` with the `az keyvault secret set` commands in [rotate-secrets.md](runbooks/rotate-secrets.md) (public contact and Turnstile site key are filled in there; never print other values).
+
+Then register the `wcp-terraform` GitHub App so CI can mint an installation token (apply bootstrap first so the vault placeholders exist):
+
+```bash
+node scripts/register-wcp-github-app.mjs
+```
+
+That writes `GITHUB-APP-ID`, `GITHUB-APP-INSTALLATION-ID`, and `GITHUB-APP-PRIVATE-KEY` to `kv-wcp-shared` (never prints the PEM), installs the app on this repo, and sets Actions variables `GH_APP_ID` / `GH_APP_INSTALLATION_ID`.
+
+If the app already exists and credentials are in `kv-wcp-shared`:
+
+```bash
+node scripts/register-wcp-github-app.mjs --from-keyvault
+```
+
+Or import from a downloaded PEM:
+
+```bash
+node scripts/register-wcp-github-app.mjs --app-id <id> --pem-file /path/to/app.pem --installation-id <id>
+```
 
 ## 2. Apply staging, then prod
 

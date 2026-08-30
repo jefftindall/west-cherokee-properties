@@ -12,7 +12,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
       Looking at a house on the map? Already a resident? Just say which address and how to reach you. Email{' '}
       <a class="text-grove underline-offset-2 hover:underline" href={`mailto:${site.email}`}>{site.email}</a>
       {' '}or call{' '}
-      <a class="text-grove underline-offset-2 hover:underline" href={`tel:${site.phoneTel}`}>{site.phone} ({site.phoneVanity})</a>
+      <a class="text-grove underline-offset-2 hover:underline" href={`tel:${site.phoneTel}`}>{site.phoneLabel}</a>
       {' '}— or use the form.
     </p>
     <form id="contact-form" class="mt-8 space-y-4" method="post" action="/api/contactInquiry">

@@ -63,6 +63,6 @@ variable "github_repo_id" {
 
 variable "manage_github_actions" {
   type        = bool
-  description = "When true, set repo-level AZURE_TF_* Actions variables (requires GH_TOKEN)"
+  description = "When true, set repo-level AZURE_TF_* Actions variables (requires a local GH_TOKEN). GH_APP_* is set by scripts/register-wcp-github-app.mjs."
   default     = true
 }

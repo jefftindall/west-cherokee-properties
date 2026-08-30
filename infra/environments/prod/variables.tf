@@ -13,6 +13,11 @@ variable "sql_location" {
   default = "eastus"
 }
 
+variable "create_sql" {
+  type    = bool
+  default = false
+}
+
 variable "custom_domain" {
   type    = string
   default = "westcherokee.com"

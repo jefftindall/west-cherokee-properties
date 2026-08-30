@@ -1,0 +1,13 @@
+{
+  "name": "wcp-terraform",
+  "url": "https://github.com/jefftindall/west-cherokee-properties",
+  "description": "Mints short-lived installation tokens so CI can refresh GitHub Actions variables and environment secrets.",
+  "public": false,
+  "default_permissions": {
+    "metadata": "read",
+    "administration": "read",
+    "environments": "write",
+    "secrets": "write",
+    "actions_variables": "write"
+  }
+}
