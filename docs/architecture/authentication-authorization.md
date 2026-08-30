@@ -1,7 +1,7 @@
 # Authentication and authorization
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-28  
+**Last updated:** 2026-08-30  
 **Scope:** How staff and renters prove identity, and how the API grants capabilities.
 
 ## Two problems, two systems
@@ -34,7 +34,7 @@ Staff are never authorized because they signed in. Renters are never added to th
 | `POST /api/apply` | Cloudflare Turnstile + schema |
 | `POST /api/stripeWebhook` | Stripe signature |
 
-`/login` is public and offers Staff office (`/.auth/login/aad`) vs Resident portal (`/.auth/login/externalid`).
+`/login` is public and offers Staff office (`/.auth/login/aad`) vs Resident portal (`/.auth/login/externalid`). Workforce Easy Auth uses the single-tenant issuer `https://login.microsoftonline.com/e78bb87b-bdca-4a5f-8f90-a1c388528a5f/v2.0`. Env Terraform sets SWA `AAD_CLIENT_ID` / `AAD_CLIENT_SECRET` from `wcp-office-<env>`.
 
 ## Office catalog
 

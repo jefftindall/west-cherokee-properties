@@ -1,6 +1,6 @@
 # Runbook: Rotate secrets
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-08-30
 
 If a secret is leaked in logs, a PR, or chat, rotate it **before** re-running the job. Never print values (`az keyvault secret show --query value`, `echo`, `set -x`, or `az ... -o json` on a secret). Log **names** only.
 
@@ -114,7 +114,7 @@ terraform apply tfplan
 | `SQL-ADMIN-PASSWORD` | terraform | terraform | Rotate SQL login, then rewrite connection string |
 | `SQL-CONNECTION-STRING` | terraform | terraform | Must match `wcpadmin` password on `sql-wcp-<env>.database.windows.net` |
 
-Copy Easy Auth / webhook settings onto the Static Web App **without** printing. Do not `set -x`.
+`AAD_CLIENT_ID` / `AAD_CLIENT_SECRET` are set by env Terraform from the Entra app (also stored as `AAD-CLIENT-ID` / `AAD-CLIENT-SECRET` in the env vault). Do not set them by hand — the next apply would overwrite. Copy only the webhook signing secret onto the Static Web App **without** printing. Do not `set -x`.
 
 ```bash
 # Staging — repeat for prod: swa-wcp-prod, rg-wcp-prod, kv-wcp-prod
@@ -123,8 +123,6 @@ az staticwebapp appsettings set \
   --resource-group rg-wcp-staging \
   --output none \
   --setting-names \
-    AAD_CLIENT_ID="$(az keyvault secret show --vault-name kv-wcp-staging --name AAD-CLIENT-ID --query value -o tsv)" \
-    AAD_CLIENT_SECRET="$(az keyvault secret show --vault-name kv-wcp-staging --name AAD-CLIENT-SECRET --query value -o tsv)" \
     STRIPE_WEBHOOK_SECRET="$(az keyvault secret show --vault-name kv-wcp-staging --name STRIPE-WEBHOOK-SECRET --query value -o tsv)"
 ```
 
@@ -138,7 +136,7 @@ cd ../prod
 terraform apply -input=false -replace='module.site.azuread_application_password.swa'
 ```
 
-Then re-run the `az staticwebapp appsettings set` block so Easy Auth gets the new `AAD_CLIENT_SECRET`.
+Re-apply the env stack after replace so SWA `AAD_CLIENT_SECRET` picks up the new password.
 
 ### SQL admin password
 
