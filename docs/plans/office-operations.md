@@ -29,7 +29,7 @@ Operational data is entered in the office UI; automations read Azure SQL. Staff 
 | Marketing copy | Git | PR |
 | Unit availability | SQL `units.available` (new) | Office unit toggle at turnover |
 | Applications / leases / rent schedule | SQL | `/office/applications`, `/office/renters`, `/office/leases` (create, edit, end) |
-| Invoices / payments | Stripe + SQL mirror | **Automated** once lease is active |
+| Invoices / payments | Stripe + SQL mirror | Portal pay automated; **manual** cash/check/Zelle via `/office/payments` |
 | Service request cost | SQL | Required when closing a request |
 
 **Move-in:** approve application (unit picker, dates, rent) or create lease → rent schedule row(s) → activate → billing automates.  
@@ -74,6 +74,7 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-18 | planned | 6 | SMS pager (`ALERT-PHONE`, ACS SMS); hourly repeat max once per 24h per incident |
 | OP-19 | planned | 6 | `/office/operations` UI; Azure Monitor backup alerts |
 | OP-20 | planned | 6 | Runbook `docs/runbooks/workflow-monitoring.md`; rotate-secrets entry for `ALERT-PHONE` |
+| OP-21 | done | 1 | Manual payment entry (`POST /api/office/payments`); dashboard rent roll (current + next month) with progress |
 
 Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 → OP-15–16 → OP-17–20 (+ Playwright for dashboard, digest preview, deep-link login).
 
@@ -97,7 +98,8 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Acceptance criteria
 
-- [x] Dashboard shows 3 properties, 5 units, correct R/Y/G/vacant from live invoice data
+- [x] Dashboard shows expected vs collected rent for current and next month with progress bars
+- [x] Staff can record manual/back payments for active leases via `/office/payments`
 - [ ] Active leases get Stripe invoices 10 days before the 1st, including prior open balances
 - [ ] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
 - [ ] At most one tenant email per lease per day; no catch-up backlog after outage
@@ -119,6 +121,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-08-30: Manual payments — `POST /api/office/payments`, `/office/payments` UI, dashboard rent roll with progress bars.
 - 2026-08-30: Manual data entry — `/office/renters` create/edit (`POST/PATCH /api/office/people`); `/office/leases` existing-renter picker, edit, and end-lease (`status` on lease API).
 - 2026-08-30: Phase 1 — unit health + dashboard API/UI, deep-link login, SQL `units.available`, `people.stripe_customer_id`, apply reads SQL.
 - 2026-08-30: Initial plan — dashboard R/Y/G, automated billing/comms with preview and daily send gate, renewal + rent schedule, maintenance costs, weekly digest, workflow SMS paging, SWA static routing and deep-link auth, staff data management model.

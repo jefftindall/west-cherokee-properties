@@ -1,0 +1,242 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import OfficeNav from '../../components/OfficeNav.astro';
+---
+
+<BaseLayout title="Record payment" description="Manual rent payments" noIndex hideNav hideFooter>
+  <OfficeNav />
+  <section class="mx-auto max-w-6xl px-4 py-10">
+    <h1 class="font-display text-4xl text-pine">Record payment</h1>
+    <p class="mt-2 text-muted">
+      Record cash, check, Zelle, or other off-portal payments. For back rent during an active lease, pick the tenant and
+      the month — an invoice is created automatically when needed.
+    </p>
+
+    <form id="pay-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <div class="md:col-span-2">
+        <label for="leaseId">Active lease</label>
+        <select id="leaseId" name="leaseId" required></select>
+      </div>
+      <div>
+        <label for="month">Rent month</label>
+        <input id="month" name="month" type="month" required />
+        <p class="mt-1 text-xs text-muted">Use a past month for back payments within the lease term.</p>
+      </div>
+      <div>
+        <label for="method">Payment method</label>
+        <select id="method" name="method" required>
+          <option value="check">Check</option>
+          <option value="cash">Cash</option>
+          <option value="zelle">Zelle</option>
+          <option value="ach">ACH / bank transfer</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="paidAt">Payment date</label>
+        <input id="paidAt" name="paidAt" type="date" required />
+      </div>
+      <div>
+        <label for="amountDollars">Amount (USD)</label>
+        <input id="amountDollars" name="amountDollars" type="number" min="0.01" step="0.01" />
+        <p class="mt-1 text-xs text-muted">Leave blank to use the lease monthly total (rent + pet rent).</p>
+      </div>
+      <div class="md:col-span-2">
+        <label for="notes">Notes (optional)</label>
+        <input id="notes" name="notes" maxlength="500" placeholder="Check #1042, memo, etc." />
+      </div>
+      <div class="md:col-span-2">
+        <button id="pay-submit" class="btn-primary" type="submit">Record payment</button>
+      </div>
+    </form>
+
+    <div id="pay-errors" class="mt-4"></div>
+    <p id="pay-status" class="mt-2 text-sm text-muted" role="status"></p>
+
+    <h2 class="mt-10 font-display text-2xl text-pine">Recent payments</h2>
+    <div id="pay-list" class="mt-4 text-sm"></div>
+  </section>
+  <script>
+    import {
+      clearErrorBanner,
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+
+    type LeaseRow = {
+      id: string;
+      unitId: string;
+      personId: string;
+      startDate: string;
+      endDate: string;
+      rentCents: number;
+      status: string;
+      terms?: { petCount?: number };
+    };
+    type UnitRow = { id: string; propertyId: string; label: string };
+    type PropertyRow = { id: string; title: string };
+    type PersonRow = { id: string; displayName: string };
+
+    const form = document.getElementById('pay-form') as HTMLFormElement;
+    const leaseSelect = document.getElementById('leaseId') as HTMLSelectElement;
+    const monthInput = document.getElementById('month') as HTMLInputElement;
+    const paidAtInput = document.getElementById('paidAt') as HTMLInputElement;
+    const amountInput = document.getElementById('amountDollars') as HTMLInputElement;
+    const submit = document.getElementById('pay-submit') as HTMLButtonElement;
+    const list = document.getElementById('pay-list');
+    const status = document.getElementById('pay-status');
+    const errors = document.getElementById('pay-errors');
+
+    let leases: LeaseRow[] = [];
+    let units: UnitRow[] = [];
+    let properties: PropertyRow[] = [];
+    let people: PersonRow[] = [];
+
+    function formatMoney(cents: number) {
+      return `$${(Number(cents) / 100).toFixed(2)}`;
+    }
+
+    function monthlyChargeCents(lease: LeaseRow) {
+      const pets = Number(lease.terms?.petCount || 0);
+      return Number(lease.rentCents) + pets * 2000;
+    }
+
+    function leaseLabel(lease: LeaseRow) {
+      const unit = units.find((row) => row.id === lease.unitId);
+      const property = unit ? properties.find((row) => row.id === unit.propertyId) : null;
+      const person = people.find((row) => row.id === lease.personId);
+      const place = property && unit ? `${property.title} · Unit ${unit.label}` : lease.unitId;
+      return `${person?.displayName || 'Tenant'} — ${place} (${lease.startDate} – ${lease.endDate})`;
+    }
+
+    function defaultMonthValue() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
+
+    function populateLeases() {
+      if (!leaseSelect) return;
+      const active = leases.filter((lease) => lease.status === 'active');
+      leaseSelect.innerHTML = `<option value="">Select lease…</option>${active
+        .map((lease) => `<option value="${lease.id}">${leaseLabel(lease)}</option>`)
+        .join('')}`;
+    }
+
+    function updateSuggestedAmount() {
+      const lease = leases.find((row) => row.id === leaseSelect?.value);
+      if (!lease || !amountInput) return;
+      if (!amountInput.value) {
+        amountInput.placeholder = formatMoney(monthlyChargeCents(lease)).replace('$', '');
+      }
+    }
+
+    async function loadLeases() {
+      const res = await fetch('/api/office/leases');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Could not load leases.');
+      leases = json.leases || [];
+      units = json.units || [];
+      people = json.people || [];
+      const dash = await fetch('/api/office/dashboard');
+      const dashJson = await dash.json().catch(() => ({}));
+      properties = dashJson.properties || [];
+      populateLeases();
+      updateSuggestedAmount();
+    }
+
+    async function loadPayments() {
+      renderLoading(list, 'Loading payments…', { block: true });
+      try {
+        const res = await fetch('/api/office/payments');
+        const json = await res.json().catch(() => ({}));
+        clearLoading(list);
+        if (!list) return;
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not load payments.');
+          return;
+        }
+        const rows = json.payments || [];
+        list.innerHTML = rows.length
+          ? `<ul class="space-y-2">${rows
+              .map(
+                (row: {
+                  payment: {
+                    amountCents: number;
+                    method: string;
+                    source: string;
+                    createdAt: string;
+                    notes?: string;
+                  };
+                  invoice?: { periodStart: string; status: string } | null;
+                  person?: { displayName: string } | null;
+                  unit?: { label: string } | null;
+                }) => {
+                  const when = new Date(row.payment.createdAt).toLocaleDateString('en-US');
+                  const tenant = row.person?.displayName || 'Tenant';
+                  const unit = row.unit ? `Unit ${row.unit.label}` : '';
+                  const period = row.invoice?.periodStart?.slice(0, 7) || '';
+                  const method = row.payment.method || row.payment.source;
+                  const note = row.payment.notes ? ` · ${row.payment.notes}` : '';
+                  return `<li class="rounded border border-line bg-panel p-3">${when} · ${tenant} ${unit} · ${period} · ${formatMoney(row.payment.amountCents)} · ${method}${note}</li>`;
+                },
+              )
+              .join('')}</ul>`
+          : '<p class="text-muted">No payments recorded yet.</p>';
+      } catch {
+        clearLoading(list);
+        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+      }
+    }
+
+    leaseSelect?.addEventListener('change', updateSuggestedAmount);
+    monthInput.value = defaultMonthValue();
+    paidAtInput.value = new Date().toISOString().slice(0, 10);
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrorBanner(errors);
+      const data = new FormData(form);
+      const amountRaw = String(data.get('amountDollars') || '').trim();
+      const payload: Record<string, unknown> = {
+        leaseId: data.get('leaseId'),
+        month: data.get('month'),
+        method: data.get('method'),
+        notes: data.get('notes') || undefined,
+        paidAt: `${data.get('paidAt')}T12:00:00.000Z`,
+      };
+      if (amountRaw) {
+        payload.amountCents = Math.round(Number(amountRaw) * 100);
+      }
+      setButtonBusy(submit, true, 'Recording…');
+      try {
+        const res = await fetch('/api/office/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not record payment.');
+          return;
+        }
+        if (status) {
+          status.textContent = `Payment recorded for ${String(data.get('month'))}.`;
+        }
+        amountInput.value = '';
+        loadPayments();
+      } catch {
+        showErrorBanner(errors, 'Could not record payment. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
+      }
+    });
+
+    loadLeases()
+      .then(() => loadPayments())
+      .catch(() => showErrorBanner(errors, 'Could not load lease data.'));
+  </script>
+</BaseLayout>

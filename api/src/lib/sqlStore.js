@@ -414,6 +414,7 @@ export function createSqlStore(connectionString) {
         }
       }
       const id = input.id || `pay-${randomUUID()}`;
+      const createdAt = input.createdAt ? new Date(input.createdAt) : new Date();
       await p
         .request()
         .input('id', sql.NVarChar, id)
@@ -422,11 +423,18 @@ export function createSqlStore(connectionString) {
         .input('stripeEventId', sql.NVarChar, input.stripeEventId || '')
         .input('stripePaymentIntentId', sql.NVarChar, input.stripePaymentIntentId || '')
         .input('receiptUrl', sql.NVarChar, input.receiptUrl || '')
+        .input('source', sql.NVarChar, input.source || 'stripe')
+        .input('method', sql.NVarChar, input.method || '')
+        .input('notes', sql.NVarChar, input.notes || '')
+        .input('recordedBy', sql.NVarChar, input.recordedBy || '')
+        .input('createdAt', sql.DateTime2, createdAt)
         .query(
-          `INSERT INTO dbo.payments (id, invoice_id, amount_cents, stripe_event_id, stripe_payment_intent_id, receipt_url)
-           VALUES (@id, @invoiceId, @amountCents, @stripeEventId, @stripePaymentIntentId, @receiptUrl)`,
+          `INSERT INTO dbo.payments (id, invoice_id, amount_cents, stripe_event_id, stripe_payment_intent_id, receipt_url,
+             source, method, notes, recorded_by, created_at)
+           VALUES (@id, @invoiceId, @amountCents, @stripeEventId, @stripePaymentIntentId, @receiptUrl,
+             @source, @method, @notes, @recordedBy, @createdAt)`,
         );
-      return { id, ...input };
+      return { id, ...input, createdAt: createdAt.toISOString() };
     },
     async listPayments(invoiceId) {
       const p = await pool();
@@ -434,12 +442,14 @@ export function createSqlStore(connectionString) {
       const result = invoiceId
         ? await req.input('invoiceId', sql.NVarChar, invoiceId).query(
             `SELECT id, invoice_id AS invoiceId, amount_cents AS amountCents, stripe_event_id AS stripeEventId,
-                    stripe_payment_intent_id AS stripePaymentIntentId, receipt_url AS receiptUrl, created_at AS createdAt
+                    stripe_payment_intent_id AS stripePaymentIntentId, receipt_url AS receiptUrl,
+                    source, method, notes, recorded_by AS recordedBy, created_at AS createdAt
              FROM dbo.payments WHERE invoice_id = @invoiceId`,
           )
         : await req.query(
             `SELECT id, invoice_id AS invoiceId, amount_cents AS amountCents, stripe_event_id AS stripeEventId,
-                    stripe_payment_intent_id AS stripePaymentIntentId, receipt_url AS receiptUrl, created_at AS createdAt
+                    stripe_payment_intent_id AS stripePaymentIntentId, receipt_url AS receiptUrl,
+                    source, method, notes, recorded_by AS recordedBy, created_at AS createdAt
              FROM dbo.payments`,
           );
       return result.recordset;

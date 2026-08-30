@@ -10,6 +10,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <p class="mt-2 text-muted">
       Unit health from live lease and invoice data. Green is current, yellow is within grace, red is late after the fee applies, vacant has no active lease.
     </p>
+    <div id="rent-roll" class="mt-8 grid gap-4 md:grid-cols-2"></div>
     <div id="dashboard-errors" class="mt-4"></div>
     <p id="dashboard-status" class="mt-4 text-sm text-muted"></p>
     <div id="dashboard-root" class="mt-8 grid gap-8"></div>
@@ -35,6 +36,21 @@ import OfficeNav from '../../components/OfficeNav.astro';
     type DashboardData = {
       asOf: string;
       properties: DashboardProperty[];
+      rentRoll?: {
+        currentMonth: RentRollMonth;
+        nextMonth: RentRollMonth;
+      };
+    };
+    type RentRollMonth = {
+      label: string;
+      periodStart: string;
+      periodEnd: string;
+      expectedCents: number;
+      collectedCents: number;
+      progressPercent: number;
+      unitCount: number;
+      paidCount: number;
+      openCount: number;
     };
 
     const HEALTH_LABELS: Record<Health, string> = {
@@ -53,10 +69,36 @@ import OfficeNav from '../../components/OfficeNav.astro';
 
     const status = document.getElementById('dashboard-status');
     const root = document.getElementById('dashboard-root');
+    const rentRoll = document.getElementById('rent-roll');
     const errors = document.getElementById('dashboard-errors');
 
     function formatMoney(cents: number) {
       return `$${(Number(cents) / 100).toFixed(2)}`;
+    }
+
+    function renderRentRoll(roll: DashboardData['rentRoll']) {
+      if (!rentRoll || !roll) return;
+      const months = [roll.currentMonth, roll.nextMonth];
+      rentRoll.innerHTML = months
+        .map(
+          (month) => `
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="font-display text-xl text-pine">${month.label}</h2>
+            <p class="text-sm font-semibold text-pine">${formatMoney(month.collectedCents)} / ${formatMoney(month.expectedCents)}</p>
+          </div>
+          <p class="mt-1 text-sm text-muted">${month.paidCount} of ${month.unitCount} units paid · ${month.openCount} open</p>
+          <div class="mt-4 wcp-progress" role="progressbar" aria-valuenow="${month.progressPercent}" aria-valuemin="0" aria-valuemax="100" aria-label="${month.label} rent collected">
+            <div class="wcp-progress-bar" style="width: ${month.progressPercent}%"></div>
+          </div>
+          <p class="mt-2 text-sm text-muted">${month.progressPercent}% collected</p>
+          <p class="mt-3">
+            <a class="btn-ghost text-sm" href="/office/payments">Record payment</a>
+          </p>
+        </article>
+      `,
+        )
+        .join('');
     }
 
     function renderDashboard(data: DashboardData) {
@@ -116,6 +158,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
         if (status) {
           status.textContent = `As of ${new Date(json.asOf).toLocaleString('en-US', { timeZone: 'America/New_York' })} (New York).`;
         }
+        renderRentRoll(json.rentRoll);
         renderDashboard(json);
       })
       .catch(() => {

@@ -32,14 +32,90 @@ export function currentMonthPeriod(date = new Date()) {
   };
 }
 
-export function invoicesForCurrentMonth(invoices, leaseId, date = new Date()) {
-  const { periodStart, periodEnd } = currentMonthPeriod(date);
+export function monthPeriodForOffset(offset = 0, date = new Date()) {
+  const { year, month } = nyDateParts(date);
+  let targetYear = year;
+  let targetMonth = month + offset;
+  while (targetMonth > 12) {
+    targetMonth -= 12;
+    targetYear += 1;
+  }
+  while (targetMonth < 1) {
+    targetMonth += 12;
+    targetYear -= 1;
+  }
+  const mm = String(targetMonth).padStart(2, '0');
+  const lastDay = new Date(targetYear, targetMonth, 0).getDate();
+  return {
+    periodStart: `${targetYear}-${mm}-01`,
+    periodEnd: `${targetYear}-${mm}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+export function monthLabel(periodStart) {
+  const [year, month] = String(periodStart).split('-').map(Number);
+  return new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: NY_TIMEZONE }).format(
+    new Date(Date.UTC(year, month - 1, 15, 12, 0, 0)),
+  );
+}
+
+export function invoicesForPeriod(invoices, leaseId, periodStart, periodEnd) {
   return (invoices || []).filter(
     (invoice) =>
       invoice.leaseId === leaseId &&
       invoice.periodStart === periodStart &&
       invoice.periodEnd === periodEnd,
   );
+}
+
+export function activeLeasesForPeriod(leases, periodStart, periodEnd) {
+  return (leases || []).filter(
+    (lease) =>
+      lease.status === 'active' && lease.startDate <= periodEnd && lease.endDate >= periodStart,
+  );
+}
+
+export function computeRentRollMonth({ leases, invoices, period }) {
+  const active = activeLeasesForPeriod(leases, period.periodStart, period.periodEnd);
+  const expectedCents = active.reduce((sum, lease) => sum + expectedMonthlyChargeCents(lease), 0);
+  const periodInvoices = (invoices || []).filter(
+    (invoice) =>
+      invoice.periodStart === period.periodStart &&
+      invoice.periodEnd === period.periodEnd &&
+      active.some((lease) => lease.id === invoice.leaseId),
+  );
+  const collectedCents = periodInvoices
+    .filter((invoice) => invoice.status === 'paid')
+    .reduce((sum, invoice) => sum + Number(invoice.amountCents), 0);
+  const paidCount = periodInvoices.filter((invoice) => invoice.status === 'paid').length;
+  const progressPercent =
+    expectedCents > 0 ? Math.min(100, Math.round((collectedCents / expectedCents) * 100)) : 0;
+
+  return {
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
+    label: monthLabel(period.periodStart),
+    expectedCents,
+    collectedCents,
+    progressPercent,
+    unitCount: active.length,
+    paidCount,
+    openCount: Math.max(0, active.length - paidCount),
+  };
+}
+
+export function buildRentRoll({ leases, invoices, now = new Date() }) {
+  const current = monthPeriodForOffset(0, now);
+  const next = monthPeriodForOffset(1, now);
+  return {
+    currentMonth: computeRentRollMonth({ leases, invoices, period: current, now }),
+    nextMonth: computeRentRollMonth({ leases, invoices, period: next, now }),
+  };
+}
+
+export function invoicesForCurrentMonth(invoices, leaseId, date = new Date()) {
+  const { periodStart, periodEnd } = currentMonthPeriod(date);
+  return invoicesForPeriod(invoices, leaseId, periodStart, periodEnd);
 }
 
 export function expectedMonthlyChargeCents(lease) {
