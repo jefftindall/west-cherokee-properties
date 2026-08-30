@@ -36,3 +36,28 @@ export function resolvePersonContact({ email = '', phone = '' } = {}) {
 export function isSyntheticPhoneEmailKey(emailKey) {
   return String(emailKey || '').startsWith('phone:');
 }
+
+export function formatPersonContact(person = {}) {
+  if (person.email) return person.email;
+  if (person.phone) return person.phone;
+  if (isSyntheticPhoneEmailKey(person.emailKey)) {
+    return formatPhoneDisplay(person.emailKey.slice('phone:'.length));
+  }
+  return '';
+}
+
+export function formatPersonLabel(person = {}) {
+  const name = String(person.displayName || '').trim() || 'Unnamed renter';
+  const contact = formatPersonContact(person);
+  return contact ? `${name} · ${contact}` : name;
+}
+
+export function personToCoTenant(person) {
+  return {
+    personId: person.id,
+    displayName: person.displayName,
+    email: person.email || '',
+    emailKey: person.emailKey,
+    phone: person.phone || '',
+  };
+}

@@ -7,18 +7,62 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Renters</h1>
+    <p class="mt-2 text-muted">
+      Add renter records here before preparing a lease. Each adult signer needs an email or phone number on file.
+    </p>
+    <form id="renter-form" class="mt-6 grid max-w-2xl gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <div class="md:col-span-2">
+        <h2 class="font-semibold text-pine">Add renter</h2>
+      </div>
+      <div>
+        <label for="displayName">Name</label>
+        <input id="displayName" name="displayName" required maxlength="200" autocomplete="name" />
+      </div>
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="email" />
+      </div>
+      <div class="md:col-span-2">
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
+        <p class="mt-1 text-xs text-muted">Provide an email or phone number.</p>
+      </div>
+      <div class="md:col-span-2">
+        <button id="renter-submit" class="btn-primary" type="submit">Save renter</button>
+      </div>
+    </form>
     <div id="renters-errors" class="mt-4"></div>
-    <div id="list" class="mt-6 text-sm"></div>
+    <p id="renter-status" class="mt-2 text-sm text-muted" role="status"></p>
+    <div id="list" class="mt-8 text-sm"></div>
   </section>
   <script>
-    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    import {
+      clearErrorBanner,
+      clearLoading,
+      renderLoading,
+      setButtonBusy,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
+    import { formatPersonContact, formatPersonLabel, type OfficePerson } from '../../lib/officePeople.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('renters-errors');
+    const status = document.getElementById('renter-status');
+    const submit = document.getElementById('renter-submit') as HTMLButtonElement | null;
+    const params = new URLSearchParams(window.location.search);
+    const returnUrl = params.get('return');
+    const pick = params.get('pick');
 
-    renderLoading(root, 'Loading renters…', { block: true });
-    fetch('/api/office/people')
-      .then(async (res) => {
+    function validateContact(email: string, phone: string) {
+      if (email || phone) return true;
+      showErrorBanner(errors, 'Provide an email or phone number.');
+      return false;
+    }
+
+    async function load() {
+      renderLoading(root, 'Loading renters…', { block: true });
+      try {
+        const res = await fetch('/api/office/people');
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -26,14 +70,73 @@ import OfficeNav from '../../components/OfficeNav.astro';
           showErrorBanner(errors, json.error || 'Could not load renters.');
           return;
         }
-        const rows = json.people || [];
+        const rows: OfficePerson[] = json.people || [];
         root.innerHTML = rows.length
-          ? `<ul class="space-y-2">${rows.map((p: { displayName: string; email: string }) => `<li>${p.displayName} · ${p.email}</li>`).join('')}</ul>`
-          : 'No renters yet.';
-      })
-      .catch(() => {
+          ? `<ul class="space-y-2">${rows
+              .map((person) => {
+                const contact = formatPersonContact(person);
+                return `<li class="rounded-lg border border-line bg-panel px-4 py-3">
+                  <div class="font-semibold text-pine">${person.displayName}</div>
+                  <div class="text-muted">${contact || 'No contact on file'}</div>
+                </li>`;
+              })
+              .join('')}</ul>`
+          : '<p class="text-muted">No renters yet. Add one above, then return to the lease form.</p>';
+      } catch {
         clearLoading(root);
         showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
-      });
+      }
+    }
+
+    document.getElementById('renter-form')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target as HTMLFormElement;
+      const data = new FormData(form);
+      const email = String(data.get('email') || '').trim();
+      const phone = String(data.get('phone') || '').trim();
+      clearErrorBanner(errors);
+      if (!validateContact(email, phone)) return;
+      setButtonBusy(submit, true, 'Saving…');
+      try {
+        const res = await fetch('/api/office/people', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            displayName: data.get('displayName'),
+            email: email || undefined,
+            phone: phone || undefined,
+          }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showErrorBanner(errors, json.error || 'Could not save renter.');
+          return;
+        }
+        const person = json.person as OfficePerson;
+        if (status) status.textContent = `${formatPersonLabel(person)} saved.`;
+        form.reset();
+        if (returnUrl && person?.id) {
+          const next = new URL(returnUrl, window.location.origin);
+          next.searchParams.set('personId', person.id);
+          if (pick) next.searchParams.set('pick', pick);
+          window.location.href = `${next.pathname}${next.search}`;
+          return;
+        }
+        load();
+      } catch {
+        showErrorBanner(errors, 'Could not save renter. Try again.');
+      } finally {
+        setButtonBusy(submit, false);
+      }
+    });
+
+    if (returnUrl) {
+      const back = document.createElement('p');
+      back.className = 'mt-4 text-sm';
+      back.innerHTML = `<a class="btn-ghost" href="${returnUrl.replaceAll('"', '&quot;')}">Back without saving</a>`;
+      document.querySelector('section')?.insertBefore(back, document.getElementById('renter-form'));
+    }
+
+    load();
   </script>
 </BaseLayout>

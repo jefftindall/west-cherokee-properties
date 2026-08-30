@@ -1,42 +1,56 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildHouseholdLeaseTerms, normalizeAdditionalOccupant, normalizeCoTenant } from './household.js';
-import { createMemoryStore, resetStoreForTests } from './store.js';
+import { resolveLeaseHousehold } from './household.js';
+import { resetStoreForTests } from './store.js';
 import { defaultTermsForUnit } from './leaseTerms.js';
 
-test('create lease stores household members and co-tenant person records', async () => {
+test('resolveLeaseHousehold builds terms from renter records', async () => {
   const store = resetStoreForTests();
-  const primaryName = 'Jordan Tenant';
-  const coTenants = [];
-  for (const row of [{ displayName: 'Sam Tenant', email: 'sam@example.com' }]) {
-    const normalized = normalizeCoTenant(row);
-    const person = await store.upsertPerson({
-      displayName: normalized.displayName,
-      email: normalized.email,
-      phone: normalized.phone,
-    });
-    coTenants.push({ ...normalized, personId: person.id });
-  }
-  const additionalOccupants = [
-    normalizeAdditionalOccupant({ name: 'Emma Tenant', relationship: 'biological child' }, primaryName),
-  ];
-  const householdTerms = buildHouseholdLeaseTerms({ primaryName, coTenants, additionalOccupants });
-  const person = await store.upsertPerson({
-    displayName: primaryName,
+  const primary = await store.upsertPerson({
+    displayName: 'Jordan Tenant',
+    email: 'jordan@example.com',
+  });
+  const coTenant = await store.upsertPerson({
+    displayName: 'Sam Tenant',
+    email: 'sam@example.com',
+  });
+  const { householdTerms } = await resolveLeaseHousehold(store, {
+    personId: primary.id,
+    coTenantPersonIds: [coTenant.id],
+    additionalOccupants: [{ name: 'Emma Tenant', relationship: 'biological child' }],
+  });
+  assert.deepEqual(householdTerms.tenantNames, ['Jordan Tenant', 'Sam Tenant']);
+  assert.match(householdTerms.authorizedOccupants, /Emma Tenant \(biological child of Jordan Tenant\)/);
+  assert.equal(householdTerms.coTenants?.[0]?.personId, coTenant.id);
+});
+
+test('create lease stores household members from renter records', async () => {
+  const store = resetStoreForTests();
+  const primary = await store.upsertPerson({
+    displayName: 'Jordan Tenant',
     email: 'jordan@example.com',
     phone: '4045550100',
+  });
+  const coTenant = await store.upsertPerson({
+    displayName: 'Sam Tenant',
+    email: 'sam@example.com',
+  });
+  const { householdTerms } = await resolveLeaseHousehold(store, {
+    personId: primary.id,
+    coTenantPersonIds: [coTenant.id],
+    additionalOccupants: [{ name: 'Emma Tenant', relationship: 'biological child' }],
   });
   const terms = defaultTermsForUnit('unit-11-noble', {
     ...householdTerms,
     rentCents: 90000,
     startDate: '2026-09-01',
-    displayName: person.displayName,
+    displayName: primary.displayName,
     maxOccupants: 3,
     securityDepositCents: 90000,
   });
   const lease = await store.createLease({
     unitId: 'unit-11-noble',
-    personId: person.id,
+    personId: primary.id,
     startDate: '2026-09-01',
     endDate: '2027-08-31',
     rentCents: 90000,
@@ -46,12 +60,7 @@ test('create lease stores household members and co-tenant person records', async
   assert.deepEqual(lease.terms.tenantNames, ['Jordan Tenant', 'Sam Tenant']);
   assert.match(lease.terms.authorizedOccupants, /Emma Tenant \(biological child of Jordan Tenant\)/);
   assert.equal(lease.terms.coTenants?.length, 1);
-  assert.equal(lease.terms.coTenants?.[0]?.personId, coTenants[0].personId);
-
-  const people = await store.listPeople();
-  assert.equal(people.length, 2);
-  const sam = people.find((row) => row.emailKey === 'sam@example.com');
-  assert.ok(sam);
+  assert.equal(lease.terms.coTenants?.[0]?.personId, coTenant.id);
 });
 
 test('phone-only co-tenant gets synthetic email key', async () => {

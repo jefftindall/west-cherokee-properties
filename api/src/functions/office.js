@@ -7,7 +7,7 @@ import { defaultTermsForUnit, monthlyChargeCents, UNIT_LEASE_DEFAULTS } from '..
 import { officeCaller, permissionGate } from '../lib/officeAccess.js';
 import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
-import { buildHouseholdLeaseTerms, normalizeAdditionalOccupant, normalizeCoTenant, OCCUPANT_RELATIONSHIPS } from '../lib/household.js';
+import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.js';
 import { getStore } from '../lib/store.js';
 import { buildDashboard } from '../lib/unitHealth.js';
 import {
@@ -16,51 +16,36 @@ import {
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
 
-const householdContactSchema = z
+const additionalOccupantSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  relationship: z.enum(OCCUPANT_RELATIONSHIPS),
+});
+
+const createPersonSchema = z
   .object({
     displayName: z.string().trim().min(1).max(200),
     email: z.string().trim().max(320).optional(),
     phone: z.string().trim().max(40).optional(),
   })
   .refine((value) => Boolean(String(value.email || '').trim() || String(value.phone || '').trim()), {
-    message: 'Each co-tenant needs an email address or phone number.',
+    message: 'Email or phone is required.',
   });
 
-const additionalOccupantSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  relationship: z.enum(OCCUPANT_RELATIONSHIPS),
-});
-
 async function createLeaseFromHousehold(store, body) {
-  const primaryName = String(body.personName || '').trim() || body.personEmail;
-  const coTenants = [];
-  for (const row of body.coTenants || []) {
-    const normalized = normalizeCoTenant(row);
-    const person = await store.upsertPerson({
-      displayName: normalized.displayName,
-      email: normalized.email,
-      phone: normalized.phone,
-    });
-    coTenants.push({ ...normalized, personId: person.id });
-  }
-  const additionalOccupants = (body.additionalOccupants || []).map((row) =>
-    normalizeAdditionalOccupant(row, primaryName),
-  );
-  const householdTerms = buildHouseholdLeaseTerms({ primaryName, coTenants, additionalOccupants });
-  const person = await store.upsertPerson({
-    displayName: primaryName,
-    email: body.personEmail,
-    phone: body.personPhone || '',
+  const { primary, householdTerms } = await resolveLeaseHousehold(store, {
+    personId: body.personId,
+    coTenantPersonIds: body.coTenantPersonIds || [],
+    additionalOccupants: body.additionalOccupants || [],
   });
   const terms = defaultTermsForUnit(body.unitId, {
     ...body.terms,
     ...householdTerms,
     rentCents: body.rentCents,
     startDate: body.startDate,
-    displayName: person.displayName,
+    displayName: primary.displayName,
   });
-  const lease = await store.createLease({ ...body, personId: person.id, terms });
-  return { lease, person, coTenants };
+  const lease = await store.createLease({ ...body, personId: primary.id, terms });
+  return { lease, person: primary };
 }
 
 // SWA-linked Functions use authLevel 'anonymous' so Easy Auth can inject x-ms-client-principal.
@@ -193,12 +178,18 @@ app.http('officeApplicationPatch', {
 });
 
 app.http('officePeople', {
-  methods: ['GET'],
+  methods: ['GET', 'POST'],
   authLevel: 'anonymous',
   route: 'office/people',
   handler: wrap(async (request) => {
-    await permissionGate(request, PERMISSION.PEOPLE_READ);
-    return jsonOk({ people: await getStore().listPeople() });
+    if (request.method === 'GET') {
+      await permissionGate(request, PERMISSION.PEOPLE_READ);
+      return jsonOk({ people: await getStore().listPeople() });
+    }
+    await permissionGate(request, PERMISSION.PEOPLE_WRITE);
+    const body = createPersonSchema.parse(await request.json());
+    const person = await getStore().upsertPerson(body);
+    return jsonOk({ person }, 201);
   }),
 });
 
@@ -223,13 +214,11 @@ app.http('officeLeasesPost', {
     const body = z
       .object({
         unitId: z.string().min(1),
-        personEmail: z.email(),
-        personName: z.string().trim().max(200).optional(),
-        personPhone: z.string().trim().max(40).optional(),
+        personId: z.string().min(1),
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
-        coTenants: z.array(householdContactSchema).max(2).optional(),
+        coTenantPersonIds: z.array(z.string().min(1)).max(2).optional(),
         additionalOccupants: z.array(additionalOccupantSchema).max(10).optional(),
         terms: z
           .object({

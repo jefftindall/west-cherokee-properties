@@ -1,4 +1,5 @@
-import { ValidationError } from './errors.js';
+import { NotFoundError, ValidationError } from './errors.js';
+import { personToCoTenant } from './people.js';
 import { resolvePersonContact } from './people.js';
 
 export const OCCUPANT_RELATIONSHIPS = [
@@ -54,4 +55,25 @@ export function buildHouseholdLeaseTerms({ primaryName, coTenants = [], addition
       relationship: occupant.relationship,
     })),
   };
+}
+
+export async function resolveLeaseHousehold(store, { personId, coTenantPersonIds = [], additionalOccupants = [] } = {}) {
+  const primary = await store.getPerson(personId);
+  if (!primary) throw new NotFoundError('Primary renter not found.');
+  const seen = new Set([primary.id]);
+  const coTenants = [];
+  for (const id of coTenantPersonIds) {
+    if (seen.has(id)) continue;
+    const person = await store.getPerson(id);
+    if (!person) throw new NotFoundError('Co-tenant renter not found.');
+    seen.add(id);
+    coTenants.push(personToCoTenant(person));
+  }
+  const normalizedOccupants = additionalOccupants.map((row) => normalizeAdditionalOccupant(row, primary.displayName));
+  const householdTerms = buildHouseholdLeaseTerms({
+    primaryName: primary.displayName,
+    coTenants,
+    additionalOccupants: normalizedOccupants,
+  });
+  return { primary, coTenants, householdTerms };
 }
