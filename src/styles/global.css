@@ -105,3 +105,9 @@ label {
   font-weight: 600;
   margin-bottom: 0.35rem;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

@@ -48,7 +48,7 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 | `properties` / `units` | Seeded; public copy still lives in git |
 | `people` | Applicants and renters; unique `email_key` |
 | `applications` | Status: submitted, in_review, approved, declined, withdrawn |
-| `leases` | Filtered unique index: one **active** lease per unit |
+| `leases` | Filtered unique index: one **active** lease per unit. `terms_json` holds the filled Georgia lease (occupants, deposit, pets). Office prepares the document; office and the renter download the same current copy. Stripe still invoices monthly charge (dwelling rent + $20/pet). |
 | `invoices` / `payments` | Stripe ids and `receipt_url`; Stripe remains the books |
 | `service_requests` | Scoped to `person_id` |
 | `office_users` | Workforce identities + roles JSON |
@@ -60,6 +60,7 @@ Local/dev and staging (while `create_sql` is false) without `SQL_CONNECTION_STRI
 - Public apply writes `applications` only when that property has a unit with `available: true` in `api/src/lib/propertySeed.js` (keep in sync with `src/content/properties`). Otherwise `POST /api/apply` returns 400.
 - A per-property waitlist is planned ([waitlist.md](../plans/waitlist.md)); until then, informal interest goes through contact.
 - Office APIs require catalog permissions.
-- Portal APIs match `people.email_key` to the signed-in email and never return other households' rows.
+- Portal APIs match `people.email_key` to the signed-in email and never return other households' rows. `GET /api/portal/lease/document` is the renter's current filled lease only.
+- Office `GET /api/office/leases/{id}/document` is the same HTML for print / in-person signing. In-app eSign (Entra login plus a code emailed to the address on file; one signature per adult party) is planned — [lease-esign.md](../plans/lease-esign.md). Do not add a third-party envelope vendor.
 - Stripe webhook verifies the signature, then updates the matching invoice by `stripe_invoice_id`.
 - CI Terraform plan downloads `GITHUB-APP-PRIVATE-KEY` from `kv-wcp-shared` (`az keyvault secret download`, never `show`) and mints a short-lived installation token. App id and installation id are repo Actions variables (`GH_APP_ID`, `GH_APP_INSTALLATION_ID`) set by `scripts/register-wcp-github-app.mjs`, not by Terraform. The PEM is not a Terraform data source. Local bootstrap apply still uses `GH_TOKEN` from `gh auth token` to write `AZURE_TF_*` Actions variables.

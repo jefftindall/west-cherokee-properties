@@ -56,3 +56,15 @@ export function failureResponse(err, correlationId) {
 export function jsonOk(jsonBody, status = 200) {
   return { status, jsonBody };
 }
+
+export function htmlOk(html, { filename, download = false } = {}) {
+  const safeName = String(filename || 'wcp-lease.html').replace(/[^\w.-]/g, '-');
+  return {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="${safeName}"`,
+    },
+    body: html,
+  };
+}

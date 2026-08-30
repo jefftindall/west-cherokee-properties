@@ -81,11 +81,17 @@ BEGIN
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     rent_cents INT NOT NULL,
-    status NVARCHAR(32) NOT NULL
+    status NVARCHAR(32) NOT NULL,
+    terms_json NVARCHAR(MAX) NULL
   );
   CREATE UNIQUE INDEX ux_leases_one_active_unit
     ON dbo.leases(unit_id)
     WHERE status = 'active';
+END;
+
+IF COL_LENGTH('dbo.leases', 'terms_json') IS NULL
+BEGIN
+  ALTER TABLE dbo.leases ADD terms_json NVARCHAR(MAX) NULL;
 END;
 
 IF OBJECT_ID('dbo.invoices', 'U') IS NULL
