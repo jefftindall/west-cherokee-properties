@@ -165,6 +165,44 @@ export function createSqlStore(connectionString) {
         );
       return result.recordset[0] || null;
     },
+    async updatePerson(id, { displayName, email, phone }) {
+      const current = await this.getPerson(id);
+      if (!current) throw new NotFoundError('Person not found.');
+      const nextDisplayName = displayName != null ? String(displayName).trim() : current.displayName;
+      const nextPhone = phone != null ? String(phone).trim() : current.phone;
+      let nextEmail = current.email;
+      let nextEmailKey = current.emailKey;
+      if (email != null) {
+        nextEmailKey = String(email).trim().toLowerCase();
+        if (!nextEmailKey) throw new ValidationError('email is required');
+        const p = await pool();
+        const conflict = await p
+          .request()
+          .input('emailKey', sql.NVarChar, nextEmailKey)
+          .input('id', sql.NVarChar, id)
+          .query('SELECT id FROM dbo.people WHERE email_key = @emailKey AND id <> @id');
+        if (conflict.recordset[0]) throw new ConflictError('Another person already uses that email.');
+        nextEmail = String(email).trim();
+      }
+      const p = await pool();
+      await p
+        .request()
+        .input('id', sql.NVarChar, id)
+        .input('displayName', sql.NVarChar, nextDisplayName)
+        .input('email', sql.NVarChar, nextEmail)
+        .input('emailKey', sql.NVarChar, nextEmailKey)
+        .input('phone', sql.NVarChar, nextPhone)
+        .query(
+          'UPDATE dbo.people SET display_name = @displayName, email = @email, email_key = @emailKey, phone = @phone WHERE id = @id',
+        );
+      return {
+        ...current,
+        displayName: nextDisplayName,
+        email: nextEmail,
+        emailKey: nextEmailKey,
+        phone: nextPhone,
+      };
+    },
     async updatePersonStripeCustomerId(id, stripeCustomerId) {
       const current = await this.getPerson(id);
       if (!current) throw new NotFoundError('Person not found.');

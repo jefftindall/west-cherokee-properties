@@ -46,9 +46,9 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 | Table | Notes |
 |-------|-------|
 | `properties` / `units` | Seeded; `units.available` gates `/apply` (staff toggles at turnover). Public copy still lives in git. |
-| `people` | Applicants and renters; unique `email_key` (email or `phone:<digits>`); optional `stripe_customer_id` reused for Stripe invoices. Office creates renter records on `/office/renters` before preparing a lease. |
+| `people` | Applicants and renters; unique `email_key` (email or `phone:<digits>`); optional `stripe_customer_id` reused for Stripe invoices. Staff create/update via `POST/PATCH /api/office/people` and `/office/renters` before preparing a lease. |
 | `applications` | Status: submitted, in_review, approved, declined, withdrawn |
-| `leases` | Filtered unique index: one **active** lease per unit. `terms_json` holds the filled Georgia lease (occupants, deposit, pets), including optional `coTenants` (adult signer records with `personId`, contact) and `additionalOccupants` (name + relationship). Office prepares the document; office and the renter download the same current copy. Stripe still invoices monthly charge (dwelling rent + $20/pet). |
+| `leases` | Filtered unique index: one **active** lease per unit. `terms_json` holds the filled Georgia lease (occupants, deposit, pets), including optional `coTenants` (adult signer records with `personId`, contact) and `additionalOccupants` (name + relationship). Staff create/update via `/office/leases` (`POST/PATCH /api/office/leases`); `status` is `active` or `ended`. Office prepares the document; office and the renter download the same current copy. Stripe still invoices monthly charge (dwelling rent + $20/pet). |
 | `invoices` / `payments` | Stripe ids and `receipt_url`; Stripe remains the books |
 | `service_requests` | Scoped to `person_id` |
 | `office_users` | Workforce identities + roles JSON |

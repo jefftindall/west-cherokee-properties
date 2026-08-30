@@ -61,6 +61,21 @@ export function createMemoryStore() {
       return clone(db.people.find((p) => p.emailKey === emailKey) || null);
     },
     getPerson: async (id) => clone(db.people.find((p) => p.id === id) || null),
+    async updatePerson(id, { displayName, email, phone }) {
+      const person = db.people.find((p) => p.id === id);
+      if (!person) throw new NotFoundError('Person not found.');
+      if (displayName != null) person.displayName = String(displayName).trim();
+      if (phone != null) person.phone = String(phone).trim();
+      if (email != null) {
+        const emailKey = String(email).trim().toLowerCase();
+        if (!emailKey) throw new ValidationError('email is required');
+        const conflict = db.people.find((p) => p.emailKey === emailKey && p.id !== id);
+        if (conflict) throw new ConflictError('Another person already uses that email.');
+        person.email = String(email).trim();
+        person.emailKey = emailKey;
+      }
+      return clone(person);
+    },
     async updatePersonStripeCustomerId(id, stripeCustomerId) {
       const person = db.people.find((p) => p.id === id);
       if (!person) throw new NotFoundError('Person not found.');

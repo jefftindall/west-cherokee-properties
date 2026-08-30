@@ -10,12 +10,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <p class="mt-2 text-muted">
       Add renter records here before preparing a lease. Each adult signer needs an email or phone number on file.
     </p>
-    <form id="renter-form" class="mt-6 grid max-w-2xl gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+    <form id="renter-form" class="mt-6 grid gap-3 rounded-lg border border-line bg-panel p-4 md:grid-cols-2">
+      <input type="hidden" id="personId" name="personId" value="" />
       <div class="md:col-span-2">
         <h2 class="font-semibold text-pine">Add renter</h2>
       </div>
       <div>
-        <label for="displayName">Name</label>
+        <label for="displayName">Full name</label>
         <input id="displayName" name="displayName" required maxlength="200" autocomplete="name" />
       </div>
       <div>
@@ -27,8 +28,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
         <p class="mt-1 text-xs text-muted">Provide an email or phone number.</p>
       </div>
-      <div class="md:col-span-2">
-        <button id="renter-submit" class="btn-primary" type="submit">Save renter</button>
+      <div class="md:col-span-2 flex flex-wrap items-end gap-3">
+        <button id="renter-submit" class="btn-primary" type="submit">Add renter</button>
+        <button class="btn-ghost hidden" type="button" id="cancel-btn">Cancel edit</button>
       </div>
     </form>
     <div id="renters-errors" class="mt-4"></div>
@@ -48,7 +50,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
     const root = document.getElementById('list');
     const errors = document.getElementById('renters-errors');
     const status = document.getElementById('renter-status');
+    const form = document.getElementById('renter-form') as HTMLFormElement | null;
     const submit = document.getElementById('renter-submit') as HTMLButtonElement | null;
+    const cancelBtn = document.getElementById('cancel-btn');
+    const personIdInput = document.getElementById('personId') as HTMLInputElement | null;
     const params = new URLSearchParams(window.location.search);
     const returnUrl = params.get('return');
     const pick = params.get('pick');
@@ -57,6 +62,25 @@ import OfficeNav from '../../components/OfficeNav.astro';
       if (email || phone) return true;
       showErrorBanner(errors, 'Provide an email or phone number.');
       return false;
+    }
+
+    function resetForm() {
+      form?.reset();
+      if (personIdInput) personIdInput.value = '';
+      if (submit) submit.textContent = 'Add renter';
+      cancelBtn?.classList.add('hidden');
+      if (status) status.textContent = '';
+    }
+
+    function startEdit(person: OfficePerson) {
+      if (personIdInput) personIdInput.value = person.id;
+      (document.getElementById('displayName') as HTMLInputElement).value = person.displayName;
+      (document.getElementById('email') as HTMLInputElement).value = person.email || '';
+      (document.getElementById('phone') as HTMLInputElement).value = person.phone || '';
+      if (submit) submit.textContent = 'Save changes';
+      cancelBtn?.classList.remove('hidden');
+      if (status) status.textContent = `Editing ${person.displayName}.`;
+      form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function load() {
@@ -72,40 +96,61 @@ import OfficeNav from '../../components/OfficeNav.astro';
         }
         const rows: OfficePerson[] = json.people || [];
         root.innerHTML = rows.length
-          ? `<ul class="space-y-2">${rows
+          ? `<table class="w-full border-collapse"><thead><tr>
+              <th class="border-b border-line py-2 text-left">Name</th>
+              <th class="border-b border-line py-2 text-left">Contact</th>
+              <th class="border-b border-line py-2 text-left">Phone</th>
+              <th class="border-b border-line py-2 text-left"></th>
+            </tr></thead><tbody>${rows
               .map((person) => {
                 const contact = formatPersonContact(person);
-                return `<li class="rounded-lg border border-line bg-panel px-4 py-3">
-                  <div class="font-semibold text-pine">${person.displayName}</div>
-                  <div class="text-muted">${contact || 'No contact on file'}</div>
-                </li>`;
+                return `<tr>
+                  <td class="py-2">${person.displayName}</td>
+                  <td>${person.email || contact || '—'}</td>
+                  <td>${person.phone || '—'}</td>
+                  <td class="py-2">
+                    <button type="button" class="btn-ghost px-2 py-1 text-xs" data-edit="${person.id}">Edit</button>
+                    <a class="btn-ghost px-2 py-1 text-xs" href="/office/leases?personId=${encodeURIComponent(person.id)}">Create lease</a>
+                  </td>
+                </tr>`;
               })
-              .join('')}</ul>`
+              .join('')}</tbody></table>`
           : '<p class="text-muted">No renters yet. Add one above, then return to the lease form.</p>';
+        const byId = new Map(rows.map((person) => [person.id, person]));
+        root.querySelectorAll('button[data-edit]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = (btn as HTMLButtonElement).dataset.edit;
+            const person = id ? byId.get(id) : null;
+            if (person) startEdit(person);
+          });
+        });
       } catch {
         clearLoading(root);
         showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
-    document.getElementById('renter-form')?.addEventListener('submit', async (event) => {
+    cancelBtn?.addEventListener('click', resetForm);
+
+    form?.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const form = event.target as HTMLFormElement;
       const data = new FormData(form);
       const email = String(data.get('email') || '').trim();
       const phone = String(data.get('phone') || '').trim();
+      const editingId = String(data.get('personId') || '').trim();
       clearErrorBanner(errors);
-      if (!validateContact(email, phone)) return;
-      setButtonBusy(submit, true, 'Saving…');
+      if (!editingId && !validateContact(email, phone)) return;
+      setButtonBusy(submit, true, editingId ? 'Saving…' : 'Saving…');
       try {
-        const res = await fetch('/api/office/people', {
-          method: 'POST',
+        const payload = {
+          displayName: data.get('displayName'),
+          ...(email ? { email } : {}),
+          phone: phone || '',
+        };
+        const res = await fetch(editingId ? `/api/office/people/${editingId}` : '/api/office/people', {
+          method: editingId ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            displayName: data.get('displayName'),
-            email: email || undefined,
-            phone: phone || undefined,
-          }),
+          body: JSON.stringify(payload),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -113,9 +158,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
           return;
         }
         const person = json.person as OfficePerson;
-        if (status) status.textContent = `${formatPersonLabel(person)} saved.`;
-        form.reset();
-        if (returnUrl && person?.id) {
+        if (status) {
+          status.textContent = editingId ? 'Renter updated.' : `${formatPersonLabel(person)} saved.`;
+        }
+        resetForm();
+        if (!editingId && returnUrl && person?.id) {
           const next = new URL(returnUrl, window.location.origin);
           next.searchParams.set('personId', person.id);
           if (pick) next.searchParams.set('pick', pick);

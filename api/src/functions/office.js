@@ -193,6 +193,24 @@ app.http('officePeople', {
   }),
 });
 
+app.http('officePersonPatch', {
+  methods: ['PATCH'],
+  authLevel: 'anonymous',
+  route: 'office/people/{id}',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.PEOPLE_WRITE);
+    const body = z
+      .object({
+        displayName: z.string().trim().min(1).max(200).optional(),
+        email: z.email().optional(),
+        phone: z.string().trim().max(40).optional(),
+      })
+      .parse(await request.json());
+    const person = await getStore().updatePerson(request.params.id, body);
+    return jsonOk({ person });
+  }),
+});
+
 app.http('officeLeasesGet', {
   methods: ['GET'],
   authLevel: 'anonymous',
@@ -218,6 +236,7 @@ app.http('officeLeasesPost', {
         startDate: z.string().min(8),
         endDate: z.string().min(8),
         rentCents: z.number().int().positive(),
+        status: z.enum(['active', 'ended']).optional(),
         coTenantPersonIds: z.array(z.string().min(1)).max(2).optional(),
         additionalOccupants: z.array(additionalOccupantSchema).max(10).optional(),
         terms: z
@@ -270,6 +289,7 @@ app.http('officeLeasePatch', {
         startDate: z.string().min(8).optional(),
         endDate: z.string().min(8).optional(),
         rentCents: z.number().int().positive().optional(),
+        status: z.enum(['active', 'ended']).optional(),
         terms: z
           .object({
             tenantNames: z.union([z.string(), z.array(z.string())]).optional(),

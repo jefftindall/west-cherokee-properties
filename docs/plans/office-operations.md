@@ -28,7 +28,7 @@ Operational data is entered in the office UI; automations read Azure SQL. Staff 
 |---------|-------|------------------|
 | Marketing copy | Git | PR |
 | Unit availability | SQL `units.available` (new) | Office unit toggle at turnover |
-| Applications / leases / rent schedule | SQL | `/office/applications`, `/office/leases`, lease manage shell |
+| Applications / leases / rent schedule | SQL | `/office/applications`, `/office/renters`, `/office/leases` (create, edit, end) |
 | Invoices / payments | Stripe + SQL mirror | **Automated** once lease is active |
 | Service request cost | SQL | Required when closing a request |
 
@@ -119,5 +119,6 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-08-30: Manual data entry — `/office/renters` create/edit (`POST/PATCH /api/office/people`); `/office/leases` existing-renter picker, edit, and end-lease (`status` on lease API).
 - 2026-08-30: Phase 1 — unit health + dashboard API/UI, deep-link login, SQL `units.available`, `people.stripe_customer_id`, apply reads SQL.
 - 2026-08-30: Initial plan — dashboard R/Y/G, automated billing/comms with preview and daily send gate, renewal + rent schedule, maintenance costs, weekly digest, workflow SMS paging, SWA static routing and deep-link auth, staff data management model.
