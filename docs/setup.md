@@ -62,7 +62,7 @@ node scripts/register-wcp-github-app.mjs --app-id <id> --pem-file /path/to/app.p
 
 Change `infra/environments/*` on a branch. CI plans both stacks. Merge to `main` so `CD: terraform` applies. Do not apply these stacks from a laptop unless a human explicitly asks.
 
-After the stacks exist, copy `AAD-CLIENT-ID` / `AAD-CLIENT-SECRET` and `STRIPE-WEBHOOK-SECRET` from the env Key Vault into SWA app settings (`AAD_CLIENT_ID`, `AAD_CLIENT_SECRET`, `STRIPE_WEBHOOK_SECRET`) so Easy Auth and webhooks work. Create the Stripe webhook endpoint in the Dashboard (test for staging, live for prod) pointing at `https://<swa-host>/api/stripeWebhook` with events `invoice.paid`, `invoice.payment_failed`, `invoice.finalized`, `checkout.session.completed`, and `charge.refunded`. Staging has `RENT_PAYMENTS_ENABLED=true`; prod stays false until go-live.
+Env Terraform writes Easy Auth `AAD_CLIENT_ID` / `AAD_CLIENT_SECRET` onto the SWA from the Entra app. After apply, replace `ALLOWED-USER-IDS` in `kv-wcp-shared` with workforce Entra object IDs (still `REPLACE_ME` until you do) and re-apply so the first staff login can bootstrap a Super Administrator. Copy `STRIPE-WEBHOOK-SECRET` from the env Key Vault into SWA app setting `STRIPE_WEBHOOK_SECRET` so webhooks verify. Create the Stripe webhook endpoint in the Dashboard (test for staging, live for prod) pointing at `https://<swa-host>/api/stripeWebhook` with events `invoice.paid`, `invoice.payment_failed`, `invoice.finalized`, `checkout.session.completed`, and `charge.refunded`. Staging has `RENT_PAYMENTS_ENABLED=true`; prod stays false until go-live.
 
 ## 3. External ID
 

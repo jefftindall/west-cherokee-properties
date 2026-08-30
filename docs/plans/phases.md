@@ -7,7 +7,7 @@ _Last updated: 2026-08-30. Azure SQL is in Central US (East US / East US 2 still
 | 1 Repo foundation | done | Astro, lint, CI, Playwright, AGENTS |
 | 2 Azure infrastructure | done | Terraform bootstrap/staging/prod, `wcp` prefix |
 | 3 Public marketing site | done | Home, properties, about, contact, style guide |
-| 4 Identity | done | Workforce Entra + External ID login chooser, permission catalog |
+| 4 Identity | done | Workforce Entra + External ID login chooser, permission catalog. SWA Easy Auth `AAD_*` app settings are Terraform-managed (2026-08-30) |
 | 5 Operational data | done | Azure SQL schema + memory store for tests |
 | 6 Rental applications | done | Public apply + office queue. Form and API accept applications only when a unit is `available` |
 | Waitlist | planned | Per-property interest list while homes are leased — [waitlist.md](./waitlist.md) |

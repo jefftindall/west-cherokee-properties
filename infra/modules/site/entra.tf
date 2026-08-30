@@ -3,8 +3,10 @@ data "azuread_client_config" "current" {}
 locals {
   auth_callback_path          = "/.auth/login/aad/callback"
   user_impersonation_scope_id = "4e8f2c1a-9b7d-4a6e-8f3c-1d2e3a4b5c6d"
+  # Custom hostnames only. Including the SWA default hostname here would
+  # cycle: SWA app_settings need the Entra client secret, Entra redirects
+  # would need the SWA hostname. Staff sign in on westcherokee.com / test.
   auth_hostnames = distinct(concat(
-    [azurerm_static_web_app.main.default_host_name],
     var.custom_domain == "" ? [] : [var.custom_domain, "www.${var.custom_domain}"],
     var.custom_hostnames,
   ))
