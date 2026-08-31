@@ -10,6 +10,7 @@ import { PERMISSION } from '../lib/permissions.js';
 import { approveApplication } from '../lib/applications.js';
 import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.js';
 import { getStore } from '../lib/store.js';
+import { buildUnitDetail } from '../lib/unitDetail.js';
 import { buildDashboard, buildRentRoll } from '../lib/unitHealth.js';
 import {
   createStripeInvoiceForRow,
@@ -114,14 +115,28 @@ app.http('officeUnitGet', {
       err.name = 'NotFoundError';
       throw err;
     }
-    const [properties, lease, people] = await Promise.all([
+    const [properties, lease, people, invoices, payments, serviceRequests] = await Promise.all([
       store.listProperties(),
       store.getActiveLeaseForUnit(unit.id),
       store.listPeople(),
+      store.listInvoices(),
+      store.listPayments(),
+      store.listServiceRequests(),
     ]);
     const property = properties.find((row) => row.id === unit.propertyId) || null;
     const tenant = lease ? people.find((person) => person.id === lease.personId) || null : null;
-    return jsonOk({ unit, property, lease, tenant, unitDefaults: UNIT_LEASE_DEFAULTS[unit.id] || null });
+    return jsonOk(
+      buildUnitDetail({
+        unit,
+        property,
+        lease,
+        tenant,
+        invoices,
+        payments,
+        serviceRequests,
+        unitDefaults: UNIT_LEASE_DEFAULTS[unit.id] || null,
+      }),
+    );
   }),
 });
 

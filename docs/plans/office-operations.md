@@ -75,6 +75,7 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-19 | planned | 6 | `/office/operations` UI; Azure Monitor backup alerts |
 | OP-20 | planned | 6 | Runbook `docs/runbooks/workflow-monitoring.md`; rotate-secrets entry for `ALERT-PHONE` |
 | OP-21 | done | 1 | Manual payment entry (`POST /api/office/payments`); dashboard rent roll (current + next month) with progress |
+| OP-22 | done | 1 | Unit manage detail — balance due, lease progress, recent payments, open/closed service requests on `/office/unit?unitId=` |
 
 Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 → OP-15–16 → OP-17–20 (+ Playwright for dashboard, digest preview, deep-link login).
 
@@ -121,6 +122,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-08-30: Unit manage detail — `GET /api/office/units/{id}` enriched payload; `/office/unit` shows balance, lease progress, payments, and service requests.
 - 2026-08-30: Manual payments — `POST /api/office/payments`, `/office/payments` UI, dashboard rent roll with progress bars.
 - 2026-08-30: Manual data entry — `/office/renters` create/edit (`POST/PATCH /api/office/people`); `/office/leases` existing-renter picker, edit, and end-lease (`status` on lease API).
 - 2026-08-30: Phase 1 — unit health + dashboard API/UI, deep-link login, SQL `units.available`, `people.stripe_customer_id`, apply reads SQL.
