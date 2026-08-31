@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Invoices" description="Rent invoices" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Invoices</h1>
     <form id="inv-form" class="mt-6 flex flex-wrap gap-3">
       <input name="leaseId" placeholder="Lease ID" required />
@@ -25,6 +26,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
     const status = document.getElementById('inv-status');
@@ -87,6 +89,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       }
     });
 
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), whenReturnOnly: true, fallbackHref: '/office' });
     load();
   </script>
 </BaseLayout>

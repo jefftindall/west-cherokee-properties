@@ -12,8 +12,13 @@ function leaseDocumentDevRewrite() {
       server.middlewares.use(
         /** @param {import('http').IncomingMessage} req @param {import('http').ServerResponse} _res @param {() => void} next */
         (req, _res, next) => {
-          if (req.url && /^\/office\/leases\/lease-[^/?#]+/.test(req.url)) {
-            req.url = '/office/lease-document';
+          if (req.url) {
+            const q = req.url.indexOf('?');
+            const pathname = q === -1 ? req.url : req.url.slice(0, q);
+            const search = q === -1 ? '' : req.url.slice(q);
+            if (/^\/office\/leases\/lease-[^/?#]+/.test(pathname)) {
+              req.url = `/office/lease-document${search}`;
+            }
           }
           next();
         },

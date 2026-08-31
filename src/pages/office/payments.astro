@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Record payment" description="Manual rent payments" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Record payment</h1>
     <p class="mt-2 text-muted">
       Record cash, check, Zelle, or other off-portal payments. For back rent during an active lease, pick the tenant and
@@ -64,6 +65,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink, officeSuccessWithReturn } from '../../lib/officeNav.ts';
 
     type LeaseRow = {
       id: string;
@@ -224,7 +226,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           return;
         }
         if (status) {
-          status.textContent = `Payment recorded for ${String(data.get('month'))}.`;
+          status.innerHTML = officeSuccessWithReturn(`Payment recorded for ${String(data.get('month'))}.`);
         }
         amountInput.value = '';
         loadPayments();
@@ -234,6 +236,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
         setButtonBusy(submit, false);
       }
     });
+
+    mountOfficeBackLink({ host: document.getElementById('office-back-link') });
 
     loadLeases()
       .then(() => loadPayments())

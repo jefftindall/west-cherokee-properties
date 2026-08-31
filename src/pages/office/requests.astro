@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Service requests" description="Maintenance queue" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Service requests</h1>
     <div id="req-errors" class="mt-4"></div>
     <div id="list" class="mt-6 text-sm"></div>
@@ -17,6 +18,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('req-errors');
@@ -72,6 +74,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       }
     }
 
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), whenReturnOnly: true, fallbackHref: '/office' });
     load();
   </script>
 </BaseLayout>

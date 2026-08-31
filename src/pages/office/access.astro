@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Access" description="Staff permission catalog" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Access</h1>
     <p class="mt-2 text-muted">Workforce Entra identities only. Renters never appear here.</p>
     <div id="access-errors" class="mt-4"></div>
@@ -13,9 +14,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
   </section>
   <script>
     import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('access-errors');
+
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), whenReturnOnly: true, fallbackHref: '/office' });
 
     renderLoading(root, 'Loading access…', { block: true });
     fetch('/api/office/access')
