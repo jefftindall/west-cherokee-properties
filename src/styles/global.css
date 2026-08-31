@@ -203,6 +203,29 @@ body {
   transition: width 0.3s ease;
 }
 
+.wcp-progress-segmented {
+  display: flex;
+  background: var(--color-line);
+}
+
+.wcp-progress-segmented > span {
+  height: 100%;
+  min-width: 0;
+  transition: width 0.3s ease;
+}
+
+.wcp-progress-paid {
+  background: var(--color-leaf);
+}
+
+.wcp-progress-unpaid {
+  background: #f59e0b;
+}
+
+.wcp-progress-remaining {
+  background: var(--color-line);
+}
+
 input,
 select,
 textarea {

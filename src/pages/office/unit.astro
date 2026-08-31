@@ -3,14 +3,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import OfficeNav from '../../components/OfficeNav.astro';
 ---
 
-<BaseLayout title="Manage unit" description="Unit availability and lease summary" noIndex hideNav hideFooter>
+<BaseLayout title="Manage unit" description="Unit availability, lease, billing, and maintenance" noIndex hideNav hideFooter>
   <OfficeNav />
-  <section class="mx-auto max-w-3xl px-4 py-10">
+  <section class="mx-auto max-w-6xl px-4 py-10">
     <p class="text-sm"><a class="btn-ghost" href="/office">Back to dashboard</a></p>
     <h1 class="font-display mt-4 text-4xl text-pine">Manage unit</h1>
     <div id="unit-errors" class="mt-3"></div>
     <p id="unit-status" class="mt-3 text-sm text-muted"></p>
-    <div id="unit-panel" class="mt-6 hidden rounded-lg border border-line bg-panel p-5"></div>
+    <div id="unit-panel" class="mt-6 hidden space-y-6"></div>
     <div id="unit-loading" class="mt-6"></div>
   </section>
   <script>
@@ -20,6 +20,77 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+
+    type Health = 'green' | 'yellow' | 'red' | 'vacant';
+    type UnitDetail = {
+      unit: {
+        id: string;
+        label: string;
+        bedrooms: number;
+        bathrooms: number;
+        available: boolean;
+      };
+      property?: { title?: string } | null;
+      lease?: {
+        id: string;
+        startDate: string;
+        endDate: string;
+        rentCents: number;
+      } | null;
+      tenant?: { displayName: string; email: string } | null;
+      health: Health;
+      balanceDueCents: number;
+      openInvoices: Array<{ id: string; periodLabel: string; amountCents: number }>;
+      leaseProgress?: {
+        startDate: string;
+        endDate: string;
+        paidThroughDate: string;
+        totalDays: number;
+        elapsedDays: number;
+        remainingDays: number;
+        paidThroughDays: number;
+        unpaidElapsedDays: number;
+        progressPercent: number;
+        paidPercent: number;
+        unpaidElapsedPercent: number;
+        remainingPercent: number;
+        paymentsCurrent: boolean;
+      } | null;
+      recentPayments: Array<{
+        payment: {
+          id: string;
+          amountCents: number;
+          method?: string;
+          source: string;
+          createdAt: string;
+          notes?: string;
+        };
+        periodLabel?: string | null;
+      }>;
+      openServiceRequests: Array<{ id: string; title: string; status: string; createdAt: string }>;
+      closedServiceRequests: Array<{ id: string; title: string; status: string; createdAt: string }>;
+    };
+
+    const HEALTH_LABELS: Record<Health, string> = {
+      green: 'Current',
+      yellow: 'Grace',
+      red: 'Late',
+      vacant: 'Vacant',
+    };
+
+    const HEALTH_CLASSES: Record<Health, string> = {
+      green: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+      yellow: 'border-amber-300 bg-amber-50 text-amber-900',
+      red: 'border-red-300 bg-red-50 text-red-900',
+      vacant: 'border-line bg-panel text-muted',
+    };
+
+    const REQUEST_STATUS_LABELS: Record<string, string> = {
+      open: 'Open',
+      in_progress: 'In progress',
+      done: 'Done',
+      cancelled: 'Cancelled',
+    };
 
     function safeReturnUrl() {
       return encodeURIComponent(window.location.pathname + window.location.search);
@@ -36,12 +107,241 @@ import OfficeNav from '../../components/OfficeNav.astro';
       return `$${(Number(cents) / 100).toFixed(2)}`;
     }
 
+    function formatDate(iso: string) {
+      return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+    }
+
+    function renderPaymentsSection(data: UnitDetail) {
+      if (!data.lease) {
+        return `<section class="rounded-lg border border-line bg-panel p-5">
+          <h2 class="font-display text-xl text-pine">Recent payments</h2>
+          <p class="mt-2 text-sm text-muted">No active lease — no payment history for this unit.</p>
+        </section>`;
+      }
+
+      const rows = data.recentPayments;
+      return `<section class="rounded-lg border border-line bg-panel p-5">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="font-display text-xl text-pine">Recent payments</h2>
+          <a class="btn-ghost text-sm" href="/office/payments">Record payment</a>
+        </div>
+        ${
+          rows.length
+            ? `<ul class="mt-4 space-y-2 text-sm">${rows
+                .map((row) => {
+                  const method =
+                    row.payment.source === 'manual'
+                      ? row.payment.method || 'manual'
+                      : row.payment.source;
+                  return `<li class="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-2 last:border-0">
+                    <span>${row.periodLabel || 'Rent'} · ${formatMoney(row.payment.amountCents)} · ${method}</span>
+                    <span class="text-muted">${formatDate(row.payment.createdAt)}</span>
+                  </li>`;
+                })
+                .join('')}</ul>`
+            : `<p class="mt-2 text-sm text-muted">No payments recorded yet for this lease.</p>`
+        }
+      </section>`;
+    }
+
+    function renderServiceRequestsSection(
+      rows: UnitDetail['openServiceRequests'],
+      options: { showActions?: boolean } = {},
+    ) {
+      if (!rows.length) {
+        return `<p class="mt-2 text-sm text-muted">None.</p>`;
+      }
+      return `<ul class="mt-4 space-y-2 text-sm">${rows
+        .map((row) => {
+          const statusLabel = REQUEST_STATUS_LABELS[row.status] || row.status;
+          const action =
+            options.showActions && row.status === 'open'
+              ? `<button data-request-id="${row.id}" class="request-progress btn-secondary ml-2 px-2 py-1 text-xs" type="button">Mark in progress</button>`
+              : '';
+          return `<li class="rounded border border-line bg-cream p-3">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div class="font-semibold text-pine">${row.title}</div>
+                <div class="text-muted">${statusLabel} · opened ${formatDate(row.createdAt)}</div>
+              </div>
+              ${action}
+            </div>
+          </li>`;
+        })
+        .join('')}</ul>`;
+    }
+
+    function renderUnitPanel(data: UnitDetail) {
+      const { unit, property, lease, tenant, health, balanceDueCents, openInvoices, leaseProgress } = data;
+      const healthClass = HEALTH_CLASSES[health] || HEALTH_CLASSES.vacant;
+      const healthLabel = HEALTH_LABELS[health] || health;
+
+      return `
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 class="font-display text-2xl text-pine">Unit ${unit.label}</h2>
+              <p class="mt-1 text-sm text-muted">${property?.title || 'Property'}</p>
+            </div>
+            <span class="rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${healthClass}">${healthLabel}</span>
+          </div>
+          <dl class="mt-6 grid gap-3 text-sm md:grid-cols-2">
+            <div><dt class="font-semibold text-pine">Property</dt><dd>${property?.title || '—'}</dd></div>
+            <div><dt class="font-semibold text-pine">Bed / bath</dt><dd>${unit.bedrooms} / ${unit.bathrooms}</dd></div>
+            <div><dt class="font-semibold text-pine">Tenant</dt><dd>${tenant ? `${tenant.displayName} (${tenant.email})` : 'None'}</dd></div>
+            <div><dt class="font-semibold text-pine">Lease</dt><dd>${
+              lease ? `${lease.startDate} – ${lease.endDate} · ${formatMoney(lease.rentCents)}/mo` : 'No active lease'
+            }</dd></div>
+          </dl>
+        </article>
+
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="font-display text-xl text-pine">Balance due</h2>
+            <p class="text-2xl font-semibold text-pine">${formatMoney(balanceDueCents)}</p>
+          </div>
+          ${
+            openInvoices.length
+              ? `<ul class="mt-4 space-y-2 text-sm">${openInvoices
+                  .map(
+                    (invoice) =>
+                      `<li class="flex justify-between gap-2 border-b border-line pb-2 last:border-0">
+                        <span>${invoice.periodLabel}</span>
+                        <span class="font-semibold">${formatMoney(invoice.amountCents)}</span>
+                      </li>`,
+                  )
+                  .join('')}</ul>`
+              : `<p class="mt-2 text-sm text-muted">${lease ? 'All invoices are paid.' : 'No open invoices.'}</p>`
+          }
+        </article>
+
+        ${
+          leaseProgress
+            ? `<article class="rounded-lg border border-line bg-panel p-5">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="font-display text-xl text-pine">Lease term</h2>
+            <p class="text-sm font-semibold text-pine">${leaseProgress.elapsedDays} of ${leaseProgress.totalDays} days · ${leaseProgress.remainingDays} remaining</p>
+          </div>
+          <p class="mt-1 text-sm text-muted">${leaseProgress.startDate} – ${leaseProgress.endDate} · Paid through ${leaseProgress.paidThroughDate}</p>
+          <div class="mt-4 wcp-progress wcp-progress-segmented" role="img" aria-label="Lease term: ${leaseProgress.paidPercent}% paid through, ${leaseProgress.unpaidElapsedPercent}% elapsed unpaid, ${leaseProgress.remainingPercent}% remaining">
+            <span class="wcp-progress-paid" style="width: ${leaseProgress.paidPercent}%"></span>
+            ${
+              leaseProgress.unpaidElapsedPercent > 0
+                ? `<span class="wcp-progress-unpaid" style="width: ${leaseProgress.unpaidElapsedPercent}%"></span>`
+                : ''
+            }
+            <span class="wcp-progress-remaining" style="width: ${leaseProgress.remainingPercent}%"></span>
+          </div>
+          <ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+            <li class="flex items-center gap-2"><span class="inline-block h-2.5 w-2.5 rounded-full bg-[var(--color-leaf)]"></span>Paid through (${leaseProgress.paidPercent}%)</li>
+            ${
+              leaseProgress.unpaidElapsedPercent > 0
+                ? `<li class="flex items-center gap-2"><span class="inline-block h-2.5 w-2.5 rounded-full bg-amber-500"></span>Elapsed, unpaid (${leaseProgress.unpaidElapsedPercent}%)</li>`
+                : ''
+            }
+            <li class="flex items-center gap-2"><span class="inline-block h-2.5 w-2.5 rounded-full bg-line"></span>Remaining (${leaseProgress.remainingPercent}%)</li>
+          </ul>
+          ${
+            lease
+              ? `<p class="mt-3"><a class="btn-ghost text-sm" href="/office/leases">View leases</a></p>`
+              : ''
+          }
+        </article>`
+            : ''
+        }
+
+        ${renderPaymentsSection(data)}
+
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 class="font-display text-xl text-pine">Open service requests</h2>
+            <a class="btn-ghost text-sm" href="/office/requests">All requests</a>
+          </div>
+          ${renderServiceRequestsSection(data.openServiceRequests, { showActions: true })}
+        </article>
+
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <h2 class="font-display text-xl text-pine">Closed requests (last 90 days)</h2>
+          ${renderServiceRequestsSection(data.closedServiceRequests)}
+        </article>
+
+        <article class="rounded-lg border border-line bg-panel p-5">
+          <h2 class="font-display text-xl text-pine">Availability</h2>
+          <form id="availability-form" class="mt-4 flex flex-wrap items-end gap-4">
+            <label class="flex items-center gap-2 text-sm font-semibold">
+              <input id="available" name="available" type="checkbox" ${unit.available ? 'checked' : ''} />
+              Accepting applications
+            </label>
+            <button id="save-availability" class="btn-primary" type="submit">Save availability</button>
+          </form>
+        </article>
+      `;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const unitId = params.get('unitId');
     const status = document.getElementById('unit-status');
     const panel = document.getElementById('unit-panel');
     const errors = document.getElementById('unit-errors');
     const loadingHost = document.getElementById('unit-loading');
+
+    async function bindAvailabilityForm() {
+      document.getElementById('availability-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const saveButton = document.getElementById('save-availability') as HTMLButtonElement | null;
+        const available = (document.getElementById('available') as HTMLInputElement | null)?.checked ?? false;
+        clearErrorBanner(errors);
+        setButtonBusy(saveButton, true, 'Saving…');
+        try {
+          const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId || '')}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ available }),
+          });
+          const saveJson = await saveRes.json().catch(() => ({}));
+          if (!saveRes.ok) {
+            showErrorBanner(errors, saveJson.error || 'Could not save availability.');
+            return;
+          }
+          if (status) {
+            status.textContent = `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`;
+          }
+        } catch {
+          showErrorBanner(errors, 'Could not save availability. Try again.');
+        } finally {
+          setButtonBusy(saveButton, false);
+        }
+      });
+    }
+
+    function bindServiceRequestActions() {
+      panel?.querySelectorAll('button.request-progress').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const button = btn as HTMLButtonElement;
+          const requestId = button.dataset.requestId;
+          if (!requestId) return;
+          clearErrorBanner(errors);
+          setButtonBusy(button, true, 'Updating…');
+          try {
+            const res = await fetch(`/api/office/service-requests/${encodeURIComponent(requestId)}`, {
+              method: 'PATCH',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ status: 'in_progress' }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              showErrorBanner(errors, json.error || 'Could not update request.');
+              return;
+            }
+            await loadUnit();
+          } catch {
+            showErrorBanner(errors, 'Could not update request. Try again.');
+          } finally {
+            setButtonBusy(button, false);
+          }
+        });
+      });
+    }
 
     async function loadUnit() {
       if (!unitId) {
@@ -55,67 +355,22 @@ import OfficeNav from '../../components/OfficeNav.astro';
 
       try {
         const res = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`);
-        const json = await res.json().catch(() => ({}));
+        const json = (await res.json().catch(() => ({}))) as UnitDetail & { error?: string };
         if (loadingHost) loadingHost.innerHTML = '';
         if (!res.ok) {
           showErrorBanner(errors, json.error || 'Unit not found.');
           return;
         }
 
-        const { unit, property, lease, tenant } = json;
-        if (status) status.textContent = `${property?.title || 'Property'} · Unit ${unit.label}`;
+        if (status) {
+          status.textContent = `${json.property?.title || 'Property'} · Unit ${json.unit.label}`;
+        }
         if (!panel) return;
 
         panel.classList.remove('hidden');
-        panel.innerHTML = `
-        <dl class="grid gap-3 text-sm md:grid-cols-2">
-          <div><dt class="font-semibold text-pine">Property</dt><dd>${property?.title || '—'}</dd></div>
-          <div><dt class="font-semibold text-pine">Bed / bath</dt><dd>${unit.bedrooms} / ${unit.bathrooms}</dd></div>
-          <div><dt class="font-semibold text-pine">Tenant</dt><dd>${tenant ? `${tenant.displayName} (${tenant.email})` : 'None'}</dd></div>
-          <div><dt class="font-semibold text-pine">Lease</dt><dd>${
-            lease ? `${lease.startDate} – ${lease.endDate} · ${formatMoney(lease.rentCents)}/mo` : 'No active lease'
-          }</dd></div>
-        </dl>
-        <form id="availability-form" class="mt-6 flex flex-wrap items-end gap-4 border-t border-line pt-6">
-          <label class="flex items-center gap-2 text-sm font-semibold">
-            <input id="available" name="available" type="checkbox" ${unit.available ? 'checked' : ''} />
-            Accepting applications
-          </label>
-          <button id="save-availability" class="btn-primary" type="submit">Save availability</button>
-        </form>
-        ${
-          lease
-            ? `<p class="mt-6"><a class="btn-secondary" href="/office/leases">View leases</a></p>`
-            : ''
-        }
-      `;
-
-        document.getElementById('availability-form')?.addEventListener('submit', async (event) => {
-          event.preventDefault();
-          const saveButton = document.getElementById('save-availability') as HTMLButtonElement | null;
-          const available = (document.getElementById('available') as HTMLInputElement | null)?.checked ?? false;
-          clearErrorBanner(errors);
-          setButtonBusy(saveButton, true, 'Saving…');
-          try {
-            const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`, {
-              method: 'PATCH',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ available }),
-            });
-            const saveJson = await saveRes.json().catch(() => ({}));
-            if (!saveRes.ok) {
-              showErrorBanner(errors, saveJson.error || 'Could not save availability.');
-              return;
-            }
-            if (status) {
-              status.textContent = `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`;
-            }
-          } catch {
-            showErrorBanner(errors, 'Could not save availability. Try again.');
-          } finally {
-            setButtonBusy(saveButton, false);
-          }
-        });
+        panel.innerHTML = renderUnitPanel(json);
+        await bindAvailabilityForm();
+        bindServiceRequestActions();
       } catch {
         if (loadingHost) loadingHost.innerHTML = '';
         showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
