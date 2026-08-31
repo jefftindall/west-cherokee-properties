@@ -16,7 +16,7 @@
     "lint:terraform": "node scripts/lint-terraform.mjs",
     "lint:actions-secrets": "node scripts/check-actions-secret-safety.mjs",
     "test:api-auth": "node --test api/src/lib/auth.test.js api/src/lib/permissions.test.js api/src/lib/officeAccess.test.js",
-    "test:api-store": "node --test api/src/lib/store.test.js api/src/lib/applications.test.js api/src/lib/leases.test.js api/src/lib/leaseDocument.test.js api/src/lib/invoices.test.js api/src/lib/payments.test.js api/src/lib/serviceRequests.test.js api/src/lib/availability.test.js api/src/lib/unitHealth.test.js api/src/lib/unitDetail.test.js",
+    "test:api-store": "node --test api/src/lib/store.test.js api/src/lib/applications.test.js api/src/lib/leases.test.js api/src/lib/leaseDocument.test.js api/src/lib/legalDocuments.test.js api/src/lib/invoices.test.js api/src/lib/payments.test.js api/src/lib/serviceRequests.test.js api/src/lib/availability.test.js api/src/lib/unitHealth.test.js api/src/lib/unitDetail.test.js",
     "test:api-stripe": "node --test api/src/lib/stripeWebhook.test.js",
     "test:api-contact": "node --test api/src/lib/httpErrors.test.js",
     "test:staging-noindex": "node --test scripts/apply-staging-noindex.test.mjs",

@@ -432,6 +432,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
                 <div class="mt-2 flex flex-wrap gap-3">
                   <a class="btn-ghost" href="/office/leases/${lease.id}">View / print</a>
                   <a class="btn-ghost" href="/api/office/leases/${lease.id}/document?download=1">Download</a>
+                  ${lease.status === 'active' ? `<a class="btn-ghost" href="/office/legal-document?leaseId=${lease.id}&type=eviction-notice">Eviction notice</a>
+                  <a class="btn-ghost" href="/office/legal-document?leaseId=${lease.id}&type=affidavit-of-service">Affidavit of service</a>` : ''}
                   <button type="button" class="btn-ghost" data-edit="${lease.id}">Edit</button>
                   ${lease.status === 'active' ? `<button type="button" class="btn-secondary px-2 py-1 text-xs" data-end="${lease.id}">End lease</button>` : ''}
                 </div>

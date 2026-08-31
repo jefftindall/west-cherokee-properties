@@ -12,6 +12,7 @@ _Last updated: 2026-08-30. Azure SQL is in Central US (East US / East US 2 still
 | 6 Rental applications | done | Public apply + office queue. Form and API accept applications only when a unit is `available` |
 | Waitlist | planned | Per-property interest list while homes are leased — [waitlist.md](./waitlist.md) |
 | Lease documents | in_progress | Prepare + download exist. In-app eSign (not a vendor): third-party login plus emailed code; each adult signs — [lease-esign.md](./lease-esign.md) |
+| Legal notices | in_progress | Eviction notice + affidavit of service generation — [legal-documents.md](./legal-documents.md) |
 | 7 Renters and leases | done | One active lease per unit; portal read |
 | 8 Invoices, payments, receipts | done | Stripe Invoice + webhook; feature flag |
 | 9 Service requests | done | Portal create; office triage |

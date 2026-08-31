@@ -39,6 +39,11 @@
       "headers": { "Cache-Control": "private, no-store" }
     },
     {
+      "route": "/office/legal-document",
+      "allowedRoles": ["anonymous", "authenticated"],
+      "headers": { "Cache-Control": "private, no-store" }
+    },
+    {
       "route": "/office/lease-document",
       "allowedRoles": ["anonymous", "authenticated"],
       "headers": { "Cache-Control": "private, no-store" }
