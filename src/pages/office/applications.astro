@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Applications" description="Review rental applications" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Applications</h1>
     <p class="mt-2 text-muted">Approve an application to create a renter and lease on a vacant unit.</p>
     <div id="app-errors" class="mt-4"></div>
@@ -18,6 +19,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('app-errors');
@@ -79,6 +81,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       }
     }
 
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), whenReturnOnly: true, fallbackHref: '/office' });
     load();
   </script>
 </BaseLayout>

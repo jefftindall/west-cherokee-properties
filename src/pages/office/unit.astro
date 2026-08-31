@@ -6,8 +6,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Manage unit" description="Unit availability, lease, billing, and maintenance" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
-    <p class="text-sm"><a class="btn-ghost" href="/office">Back to dashboard</a></p>
-    <h1 class="font-display mt-4 text-4xl text-pine">Manage unit</h1>
+    <div id="office-back-link"></div>
+    <h1 class="font-display text-4xl text-pine">Manage unit</h1>
     <div id="unit-errors" class="mt-3"></div>
     <p id="unit-status" class="mt-3 text-sm text-muted"></p>
     <div id="unit-panel" class="mt-6 hidden space-y-6"></div>
@@ -20,6 +20,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { mountOfficeBackLink, officeLinkFromHere } from '../../lib/officeNav.ts';
 
     type Health = 'green' | 'yellow' | 'red' | 'vacant';
     type UnitDetail = {
@@ -123,7 +124,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       return `<section class="rounded-lg border border-line bg-panel p-5">
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 class="font-display text-xl text-pine">Recent payments</h2>
-          <a class="btn-ghost text-sm" href="/office/payments">Record payment</a>
+          <a class="btn-ghost text-sm" href="${officeLinkFromHere('/office/payments')}">Record payment</a>
         </div>
         ${
           rows.length
@@ -243,7 +244,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           </ul>
           ${
             lease
-              ? `<p class="mt-3"><a class="btn-ghost text-sm" href="/office/leases">View leases</a></p>`
+              ? `<p class="mt-3"><a class="btn-ghost text-sm" href="${officeLinkFromHere('/office/leases')}">View leases</a></p>`
               : ''
           }
         </article>`
@@ -255,7 +256,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <article class="rounded-lg border border-line bg-panel p-5">
           <div class="flex flex-wrap items-baseline justify-between gap-2">
             <h2 class="font-display text-xl text-pine">Open service requests</h2>
-            <a class="btn-ghost text-sm" href="/office/requests">All requests</a>
+            <a class="btn-ghost text-sm" href="${officeLinkFromHere('/office/requests')}">All requests</a>
           </div>
           ${renderServiceRequestsSection(data.openServiceRequests, { showActions: true })}
         </article>
@@ -376,6 +377,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
         showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
+
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), fallbackHref: '/office' });
 
     loadUnit();
   </script>

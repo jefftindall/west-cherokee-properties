@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Renters" description="People with leases" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Renters</h1>
     <p class="mt-2 text-muted">
       Add renter records here before preparing a lease. Each adult signer needs an email or phone number on file.
@@ -46,6 +47,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { formatPersonContact, formatPersonLabel, type OfficePerson } from '../../lib/officePeople.ts';
+    import {
+      mountOfficeBackLink,
+      OFFICE_RETURN_PARAM,
+      sanitizeOfficeReturnPath,
+    } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('renters-errors');
@@ -55,7 +61,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
     const cancelBtn = document.getElementById('cancel-btn');
     const personIdInput = document.getElementById('personId') as HTMLInputElement | null;
     const params = new URLSearchParams(window.location.search);
-    const returnUrl = params.get('return');
+    const returnUrl = sanitizeOfficeReturnPath(params.get(OFFICE_RETURN_PARAM), '');
     const pick = params.get('pick');
 
     function validateContact(email: string, phone: string) {
@@ -177,12 +183,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
       }
     });
 
-    if (returnUrl) {
-      const back = document.createElement('p');
-      back.className = 'mt-4 text-sm';
-      back.innerHTML = `<a class="btn-ghost" href="${returnUrl.replaceAll('"', '&quot;')}">Back without saving</a>`;
-      document.querySelector('section')?.insertBefore(back, document.getElementById('renter-form'));
-    }
+    mountOfficeBackLink({
+      host: document.getElementById('office-back-link'),
+      whenReturnOnly: true,
+      label: 'Back without saving',
+      fallbackHref: '/office/leases',
+    });
 
     load();
   </script>

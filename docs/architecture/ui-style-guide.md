@@ -4,7 +4,7 @@
 **Last updated:** 2026-08-30  
 **Scope:** Brand tokens, layout primitives, buttons, and async interaction patterns for the public site, office, and portal.
 
-Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
+Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). Office back-navigation helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
 
 ## Brand positioning
 
@@ -138,6 +138,72 @@ showErrorBanner(bannerHost, json.error || 'Could not complete that action.');
 ```
 
 Place the banner host near the form or panel it describes (top of section or directly above the action row).
+
+## Office back navigation
+
+Staff move between the dashboard, unit detail, payments, leases, and other office tools. **Always preserve context** so they can return to the page they came from without relying on the browser back button.
+
+Helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts).
+
+### `return` query param
+
+When linking from page A to page B, stamp the current path on the destination:
+
+```typescript
+import { officeLinkFromHere } from '../lib/officeNav.ts';
+
+// From manage unit → record payment (return=/office/unit?unitId=…)
+officeLinkFromHere('/office/payments');
+```
+
+The param name is `return`. Values must stay under `/office` (sanitized server- and client-side).
+
+### Back link at page top
+
+Detail and workflow pages show a **Back to …** control above the heading (`btn-ghost`, `text-sm`). Mount on load:
+
+```typescript
+import { mountOfficeBackLink } from '../lib/officeNav.ts';
+
+mountOfficeBackLink({
+  host: document.getElementById('office-back-link'),
+  fallbackHref: '/office', // or '/office/leases' for lease documents
+});
+```
+
+Top-level nav destinations (leases list, applications, etc.) show the back link **only when** `return` is present:
+
+```typescript
+mountOfficeBackLink({ host: ..., whenReturnOnly: true, fallbackHref: '/office' });
+```
+
+Markup pattern:
+
+```html
+<section>
+  <div id="office-back-link"></div>
+  <h1>…</h1>
+</section>
+```
+
+Labels are derived automatically (`Back to dashboard`, `Back to manage unit`, etc.).
+
+### After successful actions
+
+When a form completes a sub-task (e.g. recording a payment), append a return link in the success status — do not leave the user on a dead end:
+
+```typescript
+import { officeSuccessWithReturn } from '../lib/officeNav.ts';
+
+status.innerHTML = officeSuccessWithReturn('Payment recorded for 2026-08.');
+```
+
+### Checklist
+
+1. Outbound office links from dashboard, unit, or list pages use `officeLinkFromHere`.
+2. Destination pages mount `mountOfficeBackLink` with a sensible `fallbackHref`.
+3. Successful submits on workflow pages call `officeSuccessWithReturn`.
+4. Do not use raw `history.back()` or hard-coded back URLs when a `return` param is available.
 
 ## Interaction checklist
 

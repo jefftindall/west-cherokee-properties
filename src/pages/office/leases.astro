@@ -6,6 +6,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
 <BaseLayout title="Leases" description="Prepare and download leases" noIndex hideNav hideFooter>
   <OfficeNav />
   <section class="mx-auto max-w-6xl px-4 py-10">
+    <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Leases</h1>
     <p class="mt-2 text-muted">
       Select renter records for each adult lease signer. Add missing renters on the Renters page first. Record active
@@ -98,6 +99,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { formatPersonLabel, renterSelectOptions, type OfficePerson } from '../../lib/officePeople.ts';
+    import { mountOfficeBackLink, officeLinkFromHere } from '../../lib/officeNav.ts';
     type Unit = { id: string; label: string; propertyId: string };
     type Lease = {
       id: string;
@@ -430,10 +432,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
                 <div class="font-semibold text-pine">${address}</div>
                 <div class="text-muted">${person ? formatPersonLabel(person) : lease.personId} · ${lease.status} · ${lease.startDate} – ${lease.endDate} · $${(lease.rentCents / 100).toFixed(2)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
                 <div class="mt-2 flex flex-wrap gap-3">
-                  <a class="btn-ghost" href="/office/leases/${lease.id}">View / print</a>
+                  <a class="btn-ghost" href="${officeLinkFromHere(`/office/leases/${lease.id}`)}">View / print</a>
                   <a class="btn-ghost" href="/api/office/leases/${lease.id}/document?download=1">Download</a>
-                  ${lease.status === 'active' ? `<a class="btn-ghost" href="/office/legal-document?leaseId=${lease.id}&type=eviction-notice">Eviction notice</a>
-                  <a class="btn-ghost" href="/office/legal-document?leaseId=${lease.id}&type=affidavit-of-service">Affidavit of service</a>` : ''}
+                  ${lease.status === 'active' ? `<a class="btn-ghost" href="${officeLinkFromHere('/office/legal-document', { leaseId: lease.id, type: 'eviction-notice' })}">Eviction notice</a>
+                  <a class="btn-ghost" href="${officeLinkFromHere('/office/legal-document', { leaseId: lease.id, type: 'affidavit-of-service' })}">Affidavit of service</a>` : ''}
                   <button type="button" class="btn-ghost" data-edit="${lease.id}">Edit</button>
                   ${lease.status === 'active' ? `<button type="button" class="btn-secondary px-2 py-1 text-xs" data-end="${lease.id}">End lease</button>` : ''}
                 </div>
@@ -541,7 +543,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           return;
         }
         if (status) status.textContent = 'Lease prepared. Open View / print to sign in person.';
-        if (json.lease?.id) window.location.href = `/office/leases/${json.lease.id}`;
+        if (json.lease?.id) window.location.href = officeLinkFromHere(`/office/leases/${json.lease.id}`);
         else load();
       } catch {
         showErrorBanner(errors, 'Could not save lease. Try again.');
@@ -549,6 +551,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
         setButtonBusy(submit, false);
       }
     });
+    mountOfficeBackLink({ host: document.getElementById('office-back-link'), whenReturnOnly: true, fallbackHref: '/office' });
     load();
   </script>
 </BaseLayout>
