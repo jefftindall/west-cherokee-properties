@@ -11,6 +11,8 @@ export const API_FETCH_MAX_BACKOFF_MS = 16_000;
 /** Immediate "failed to fetch" (no Functions / offline) stops before burning the full budget. */
 export const API_FETCH_MAX_FAST_NETWORK_FAILURES = 3;
 export const API_FETCH_FAST_FAILURE_MS = 2_000;
+/** Sent on every attempt so support can match client reports to gateway/function logs. */
+export const CLIENT_CORRELATION_HEADER = 'X-Client-Correlation-Id';
 
 export type ApiFetchPhase = 'request' | 'slow' | 'backoff' | 'exhausted';
 
@@ -20,6 +22,7 @@ export type ApiFetchStatus = {
   phase: ApiFetchPhase;
   message: string;
   retryInMs?: number;
+  correlationId: string;
 };
 
 export type ApiFetchOptions = RequestInit & {
@@ -29,6 +32,8 @@ export type ApiFetchOptions = RequestInit & {
   maxTotalMs?: number;
   /** When to surface "taking longer than usual" on the first attempt. Default 8s. */
   slowAfterMs?: number;
+  /** Stable id for this retry session (default: new UUID). */
+  correlationId?: string;
   /** Called when UI should update (slow first try, retries, backoff). */
   onStatus?: (status: ApiFetchStatus) => void;
   /** Override fetch (tests). */
@@ -39,19 +44,34 @@ export type ApiFetchOptions = RequestInit & {
   sleep?: (ms: number) => Promise<void>;
 };
 
+export function newClientCorrelationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `wcp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export class ApiFetchExhaustedError extends Error {
   readonly name = 'ApiFetchExhaustedError';
   readonly attempts: number;
   readonly elapsedMs: number;
+  readonly correlationId: string;
   readonly lastStatus?: number;
 
   constructor(
     message: string,
-    opts: { attempts: number; elapsedMs: number; lastStatus?: number; cause?: unknown },
+    opts: {
+      attempts: number;
+      elapsedMs: number;
+      correlationId: string;
+      lastStatus?: number;
+      cause?: unknown;
+    },
   ) {
     super(message, opts.cause !== undefined ? { cause: opts.cause } : undefined);
     this.attempts = opts.attempts;
     this.elapsedMs = opts.elapsedMs;
+    this.correlationId = opts.correlationId;
     this.lastStatus = opts.lastStatus;
   }
 }
@@ -140,13 +160,20 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
     timeoutMs = API_FETCH_ATTEMPT_TIMEOUT_MS,
     maxTotalMs = API_FETCH_MAX_TOTAL_MS,
     slowAfterMs = API_FETCH_SLOW_AFTER_MS,
+    correlationId = newClientCorrelationId(),
     onStatus,
     fetchImpl = fetch,
     now = () => Date.now(),
     sleep = defaultSleep,
     signal: outerSignal,
+    headers: inputHeaders,
     ...init
   } = options;
+
+  const headers = new Headers(inputHeaders);
+  if (!headers.has(CLIENT_CORRELATION_HEADER)) {
+    headers.set(CLIENT_CORRELATION_HEADER, correlationId);
+  }
 
   const started = now();
   const deadline = started + maxTotalMs;
@@ -161,6 +188,7 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
       elapsedMs: now() - started,
       phase,
       message: statusMessage(phase, attempt, extra?.retryInMs),
+      correlationId,
       ...extra,
     });
   };
@@ -169,7 +197,7 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
     emit('exhausted');
     throw new ApiFetchExhaustedError(
       'Could not reach the API after several tries. Check your connection or report an issue.',
-      { attempts: attempt, elapsedMs: now() - started, lastStatus, cause },
+      { attempts: attempt, elapsedMs: now() - started, correlationId, lastStatus, cause },
     );
   };
 
@@ -200,7 +228,13 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
         slowTimer = setTimeout(() => emit('slow'), slowAfterMs);
       }
 
-      const res = await fetchWithTimeout(fetchImpl, input, init, attemptTimeout, outerSignal);
+      const res = await fetchWithTimeout(
+        fetchImpl,
+        input,
+        { ...init, headers },
+        attemptTimeout,
+        outerSignal,
+      );
 
       if (!isRetryableStatus(res.status)) {
         return res;
@@ -250,6 +284,7 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
     {
       attempts: attempt,
       elapsedMs: now() - started,
+      correlationId,
       lastStatus,
       cause: lastCause,
     },

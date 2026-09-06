@@ -28,6 +28,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         <label for="message">Message</label>
         <textarea id="message" name="message" rows="6" required maxlength="5000"></textarea>
       </div>
+      <input type="hidden" id="client-correlation-id" name="clientCorrelationId" value="" />
       <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
       <div id="contact-errors"></div>
       <button id="contact-submit" class="btn-primary" type="submit">Send message</button>
@@ -50,7 +51,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
     const errors = document.getElementById('contact-errors');
     const submit = document.getElementById('contact-submit') as HTMLButtonElement | null;
     const message = document.getElementById('message') as HTMLTextAreaElement | null;
+    const clientCorrelationInput = document.getElementById(
+      'client-correlation-id',
+    ) as HTMLInputElement | null;
     const params = new URLSearchParams(location.search);
+    const clientCorrelationId = String(params.get('cid') || '').trim();
+    if (clientCorrelationInput && clientCorrelationId) {
+      clientCorrelationInput.value = clientCorrelationId.slice(0, 80);
+    }
     if (message && params.get('issue') === 'api-timeout') {
       const from = params.get('from') || '';
       message.value = `The site API did not respond after several tries (from: ${from || 'unknown page'}).`;
@@ -67,6 +75,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         email: String(data.get('email') || ''),
         message: String(data.get('message') || ''),
         turnstileToken: tokenInput?.value || '',
+        clientCorrelationId: String(data.get('clientCorrelationId') || '').trim() || undefined,
       };
       try {
         const res = await apiFetch('/api/contactInquiry', {

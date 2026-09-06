@@ -95,7 +95,8 @@ Behavior:
 4. Retry on network failures, per-attempt timeouts, and HTTP 408 / 429 / 500 / 502 / 503 / 504.
 5. Do **not** retry ordinary 4xx/2xx application responses.
 6. Stop early after a few immediate connection or gateway failures (local Functions down / offline) so developers are not stuck for the full budget.
-7. When the budget is exhausted, throw `ApiFetchExhaustedError` and show `showApiExhaustedBanner` (includes **Report an issue** → `/contact?issue=api-timeout&from=…`).
+7. When the budget is exhausted, throw `ApiFetchExhaustedError` (includes `correlationId`) and show `showApiExhaustedBanner` (**Report an issue** → `/contact?issue=api-timeout&from=…&cid=<client-correlation-id>`).
+8. Each attempt sends `X-Client-Correlation-Id`. Contact stores `cid` in a hidden `clientCorrelationId` field and includes it on submit so staff can match the report to retry logs.
 
 ```typescript
 import { apiFetch, isApiFetchExhausted } from '../lib/apiFetch.ts';

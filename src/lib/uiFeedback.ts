@@ -72,11 +72,12 @@ export type ErrorBannerOptions = {
   reportIssueHref?: string;
 };
 
-export function reportIssueHref(context?: string): string {
+export function reportIssueHref(context?: string, correlationId?: string): string {
   const params = new URLSearchParams();
   params.set('issue', 'api-timeout');
   if (context) params.set('from', context);
   else if (typeof location !== 'undefined') params.set('from', location.pathname + location.search);
+  if (correlationId) params.set('cid', correlationId);
   return `/contact?${params.toString()}`;
 }
 
@@ -109,7 +110,11 @@ export function showApiExhaustedBanner(
     isApiFetchExhausted(err) && err.message
       ? err.message
       : 'This is taking too long. Please report an issue so we can look into it.';
-  return showErrorBanner(host, message, { replace, reportIssueHref: reportIssueHref(context) });
+  const correlationId = isApiFetchExhausted(err) ? err.correlationId : undefined;
+  return showErrorBanner(host, message, {
+    replace,
+    reportIssueHref: reportIssueHref(context, correlationId),
+  });
 }
 
 export function clearErrorBanner(host: HTMLElement | null) {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   API_FETCH_MAX_FAST_NETWORK_FAILURES,
+  CLIENT_CORRELATION_HEADER,
   apiFetch,
   isApiFetchExhausted,
   isRetryableStatus,
@@ -243,5 +244,41 @@ describe('apiFetch', () => {
     });
     assert.equal(res.status, 400);
     assert.equal(calls, 1);
+  });
+
+  it('sends a client correlation header and attaches it to exhausted errors', async () => {
+    const seen: string[] = [];
+    const fixedId = '11111111-2222-4333-8444-555555555555';
+    await assert.rejects(
+      () =>
+        apiFetch('/api/demo', {
+          correlationId: fixedId,
+          timeoutMs: 5_000,
+          maxTotalMs: 180_000,
+          slowAfterMs: 30_000,
+          fetchImpl: async (_input, init) => {
+            const headers = new Headers(init?.headers);
+            seen.push(headers.get(CLIENT_CORRELATION_HEADER) || '');
+            throw new TypeError('Failed to fetch');
+          },
+          sleep: async () => {},
+          now: (() => {
+            let t = 0;
+            return () => {
+              t += 10;
+              return t;
+            };
+          })(),
+        }),
+      (err: unknown) => {
+        assert.equal(isApiFetchExhausted(err), true);
+        if (isApiFetchExhausted(err)) {
+          assert.equal(err.correlationId, fixedId);
+        }
+        return true;
+      },
+    );
+    assert.equal(seen.length, API_FETCH_MAX_FAST_NETWORK_FAILURES);
+    assert.ok(seen.every((id) => id === fixedId));
   });
 });
