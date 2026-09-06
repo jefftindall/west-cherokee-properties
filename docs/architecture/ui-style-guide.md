@@ -94,7 +94,7 @@ Behavior:
 3. After ~8s on the first try, or on any retry, update the loading/busy label via `onStatus` (e.g. “Taking longer than usual…” / “Still working — try 2…”).
 4. Retry on network failures, per-attempt timeouts, and HTTP 408 / 429 / 500 / 502 / 503 / 504.
 5. Do **not** retry ordinary 4xx/2xx application responses.
-6. Stop early after a few immediate connection failures (local Functions down / offline) so developers are not stuck for the full budget.
+6. Stop early after a few immediate connection or gateway failures (local Functions down / offline) so developers are not stuck for the full budget.
 7. When the budget is exhausted, throw `ApiFetchExhaustedError` and show `showApiExhaustedBanner` (includes **Report an issue** → `/contact?issue=api-timeout&from=…`).
 
 ```typescript

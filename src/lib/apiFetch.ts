@@ -151,7 +151,7 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
   const started = now();
   const deadline = started + maxTotalMs;
   let attempt = 0;
-  let fastNetworkFailures = 0;
+  let fastFailures = 0;
   let lastStatus: number | undefined;
   let lastCause: unknown;
 
@@ -163,6 +163,26 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
       message: statusMessage(phase, attempt, extra?.retryInMs),
       ...extra,
     });
+  };
+
+  const throwFastExhausted = (cause: unknown) => {
+    emit('exhausted');
+    throw new ApiFetchExhaustedError(
+      'Could not reach the API after several tries. Check your connection or report an issue.',
+      { attempts: attempt, elapsedMs: now() - started, lastStatus, cause },
+    );
+  };
+
+  const noteFastFailure = (cause: unknown, failedIn: number) => {
+    if (failedIn < API_FETCH_FAST_FAILURE_MS) {
+      fastFailures += 1;
+      if (fastFailures >= API_FETCH_MAX_FAST_NETWORK_FAILURES) {
+        throwFastExhausted(cause);
+      }
+    } else {
+      // Slow failure (likely cold start / gateway timeout) — keep using the full budget.
+      fastFailures = 0;
+    }
   };
 
   while (deadline - now() > 0) {
@@ -193,24 +213,17 @@ export async function apiFetch(input: RequestInfo | URL, options: ApiFetchOption
       } catch {
         /* ignore */
       }
+      noteFastFailure(lastCause, now() - attemptStarted);
     } catch (err) {
       lastCause = err;
       if (outerSignal?.aborted) throw err;
 
       if (isAbortError(err)) {
         lastStatus = undefined;
+        // Per-attempt timeout — typical after idle cold start; do not count as fast fail.
+        fastFailures = 0;
       } else if (isNetworkError(err)) {
-        const failedIn = now() - attemptStarted;
-        if (failedIn < API_FETCH_FAST_FAILURE_MS) {
-          fastNetworkFailures += 1;
-          if (fastNetworkFailures >= API_FETCH_MAX_FAST_NETWORK_FAILURES) {
-            emit('exhausted');
-            throw new ApiFetchExhaustedError(
-              'Could not reach the API after several tries. Check your connection or report an issue.',
-              { attempts: attempt, elapsedMs: now() - started, cause: err },
-            );
-          }
-        }
+        noteFastFailure(err, now() - attemptStarted);
       } else {
         throw err;
       }

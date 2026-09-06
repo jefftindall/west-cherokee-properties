@@ -136,6 +136,65 @@ describe('apiFetch', () => {
     assert.equal(calls, API_FETCH_MAX_FAST_NETWORK_FAILURES);
   });
 
+  it('stops early after repeated fast gateway failures', async () => {
+    let calls = 0;
+    await assert.rejects(
+      () =>
+        apiFetch('/api/demo', {
+          timeoutMs: 5_000,
+          maxTotalMs: 180_000,
+          slowAfterMs: 30_000,
+          fetchImpl: async () => {
+            calls += 1;
+            return new Response('bad gateway', { status: 502 });
+          },
+          sleep: async () => {},
+          now: (() => {
+            let t = 0;
+            return () => {
+              t += 10;
+              return t;
+            };
+          })(),
+        }),
+      (err: unknown) => {
+        assert.equal(isApiFetchExhausted(err), true);
+        if (isApiFetchExhausted(err)) {
+          assert.match(err.message, /several tries/i);
+          assert.equal(err.lastStatus, 502);
+        }
+        return true;
+      },
+    );
+    assert.equal(calls, API_FETCH_MAX_FAST_NETWORK_FAILURES);
+  });
+
+  it('keeps retrying after slow timeouts within the budget', async () => {
+    let calls = 0;
+    let now = 0;
+    const res = await apiFetch('/api/demo', {
+      timeoutMs: 1_000,
+      maxTotalMs: 10_000,
+      slowAfterMs: 50_000,
+      fetchImpl: async () => {
+        calls += 1;
+        now += 1_000;
+        if (calls < 3) {
+          const err = new Error('API request timed out');
+          err.name = 'AbortError';
+          throw err;
+        }
+        return new Response('{}', { status: 200 });
+      },
+      sleep: async (ms) => {
+        now += ms;
+      },
+      now: () => now,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(calls, 3);
+  });
+
   it('exhausts when the total budget elapses on timeouts', async () => {
     let calls = 0;
     let now = 0;
