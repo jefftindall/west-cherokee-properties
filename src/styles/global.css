@@ -182,7 +182,7 @@ body {
 }
 
 .wcp-alert-report {
-  color: inherit;
+  color: #991b1b;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
