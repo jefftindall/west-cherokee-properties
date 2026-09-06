@@ -168,9 +168,28 @@ body {
   color: #991b1b;
 }
 
+.wcp-alert-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .wcp-alert-message {
   margin: 0;
-  flex: 1;
+}
+
+.wcp-alert-actions {
+  margin: 0.5rem 0 0;
+}
+
+.wcp-alert-report {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wcp-alert-report:hover {
+  text-decoration-thickness: 2px;
 }
 
 .wcp-alert-dismiss {

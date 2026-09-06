@@ -36,12 +36,25 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
   </section>
   <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <script>
-    import { clearErrorBanner, setButtonBusy, showErrorBanner } from '../lib/uiFeedback.ts';
+    import { apiFetch, isApiFetchExhausted } from '../lib/apiFetch.ts';
+    import {
+      bindApiFetchStatus,
+      clearErrorBanner,
+      setButtonBusy,
+      showApiExhaustedBanner,
+      showErrorBanner,
+    } from '../lib/uiFeedback.ts';
 
     const form = document.getElementById('contact-form') as HTMLFormElement | null;
     const status = document.getElementById('contact-status');
     const errors = document.getElementById('contact-errors');
     const submit = document.getElementById('contact-submit') as HTMLButtonElement | null;
+    const message = document.getElementById('message') as HTMLTextAreaElement | null;
+    const params = new URLSearchParams(location.search);
+    if (message && params.get('issue') === 'api-timeout') {
+      const from = params.get('from') || '';
+      message.value = `The site API did not respond after several tries (from: ${from || 'unknown page'}).`;
+    }
     form?.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!status) return;
@@ -56,10 +69,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         turnstileToken: tokenInput?.value || '',
       };
       try {
-        const res = await fetch('/api/contactInquiry', {
+        const res = await apiFetch('/api/contactInquiry', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -68,8 +82,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
         }
         status.textContent = 'Thanks — we received your message.';
         form.reset();
-      } catch {
-        showErrorBanner(errors, 'Could not send. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not send. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }

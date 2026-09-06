@@ -19,11 +19,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { mountOfficeBackLink } from '../../lib/officeNav.ts';
@@ -36,7 +39,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
     async function load() {
       renderLoading(root, 'Loading invoices…', { block: true });
       try {
-        const res = await fetch('/api/office/invoices');
+        const res = await apiFetch('/api/office/invoices', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -53,9 +58,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
               )
               .join('')}</ul>`
           : 'No invoices yet.';
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
@@ -66,7 +72,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       clearErrorBanner(errors);
       setButtonBusy(submit, true, 'Creating…');
       try {
-        const res = await fetch('/api/office/invoices', {
+        const res = await apiFetch('/api/office/invoices', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -74,6 +80,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
             periodStart: data.get('periodStart'),
             periodEnd: data.get('periodEnd'),
           }),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -82,8 +89,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
         }
         if (status) status.textContent = 'Invoice created.';
         load();
-      } catch {
-        showErrorBanner(errors, 'Could not create invoice. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not create invoice. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }

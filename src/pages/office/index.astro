@@ -16,7 +16,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="dashboard-root" class="mt-8 grid gap-8"></div>
   </section>
   <script>
-    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
+    import {
+      bindApiFetchStatus,
+      clearLoading,
+      renderLoading,
+      showApiExhaustedBanner,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
     import { officeLinkFromHere } from '../../lib/officeNav.ts';
     type Health = 'green' | 'yellow' | 'red' | 'vacant';
     type DashboardUnit = {
@@ -146,10 +153,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
         .join('');
     }
 
-    renderLoading(root, 'Loading dashboard…', { block: true });
-
-    fetch('/api/office/dashboard')
-      .then(async (res) => {
+    async function load() {
+      renderLoading(root, 'Loading dashboard…', { block: true });
+      try {
+        const res = await apiFetch('/api/office/dashboard', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!res.ok) {
@@ -161,10 +170,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
         }
         renderRentRoll(json.rentRoll);
         renderDashboard(json);
-      })
-      .catch(() => {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
-      });
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+      }
+    }
+
+    load();
   </script>
 </BaseLayout>

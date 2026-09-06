@@ -91,11 +91,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { formatPersonLabel, renterSelectOptions, type OfficePerson } from '../../lib/officePeople.ts';
@@ -372,14 +375,19 @@ import OfficeNav from '../../components/OfficeNav.astro';
       if (!window.confirm(`End the active lease for ${unitDefaults[lease.unitId]?.premisesAddress || lease.unitId}?`)) {
         return;
       }
-      const res = await fetch(`/api/office/leases/${lease.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'ended' }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (status) status.textContent = res.ok ? 'Lease ended.' : json.error || 'Could not end lease.';
-      if (res.ok) load();
+      try {
+        const res = await apiFetch(`/api/office/leases/${lease.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'ended' }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (status) status.textContent = res.ok ? 'Lease ended.' : json.error || 'Could not end lease.';
+        if (res.ok) load();
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else if (status) status.textContent = 'Could not end lease.';
+      }
     }
 
     function applyReturnParams() {
@@ -399,7 +407,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
     async function load() {
       renderLoading(root, 'Loading leases…', { block: true });
       try {
-        const res = await fetch('/api/office/leases');
+        const res = await apiFetch('/api/office/leases', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -458,9 +468,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
             if (lease) endLease(lease);
           });
         });
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
@@ -501,7 +512,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       setButtonBusy(submit, true, editingId ? 'Saving…' : 'Preparing…');
       try {
         if (editingId) {
-          const res = await fetch(`/api/office/leases/${editingId}`, {
+          const res = await apiFetch(`/api/office/leases/${editingId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -510,6 +521,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
               rentCents: dollarsToCents(data.get('rentDollars')),
               terms,
             }),
+            onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
           });
           const json = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -522,7 +534,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           return;
         }
         if (!validateHousehold()) return;
-        const res = await fetch('/api/office/leases', {
+        const res = await apiFetch('/api/office/leases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -536,6 +548,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
             additionalOccupants: readOccupants(),
             terms,
           }),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -545,8 +558,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
         if (status) status.textContent = 'Lease prepared. Open View / print to sign in person.';
         if (json.lease?.id) window.location.href = officeLinkFromHere(`/office/leases/${json.lease.id}`);
         else load();
-      } catch {
-        showErrorBanner(errors, 'Could not save lease. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not save lease. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }

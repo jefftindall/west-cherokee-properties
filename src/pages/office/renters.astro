@@ -39,11 +39,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="list" class="mt-8 text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { formatPersonContact, formatPersonLabel, type OfficePerson } from '../../lib/officePeople.ts';
@@ -92,7 +95,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
     async function load() {
       renderLoading(root, 'Loading renters…', { block: true });
       try {
-        const res = await fetch('/api/office/people');
+        const res = await apiFetch('/api/office/people', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -130,9 +135,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
             if (person) startEdit(person);
           });
         });
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
@@ -153,10 +159,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
           ...(email ? { email } : {}),
           phone: phone || '',
         };
-        const res = await fetch(editingId ? `/api/office/people/${editingId}` : '/api/office/people', {
+        const res = await apiFetch(editingId ? `/api/office/people/${editingId}` : '/api/office/people', {
           method: editingId ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -176,8 +183,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
           return;
         }
         load();
-      } catch {
-        showErrorBanner(errors, 'Could not save renter. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not save renter. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }

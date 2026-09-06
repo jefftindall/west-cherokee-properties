@@ -23,11 +23,14 @@ import PortalNav from '../../components/PortalNav.astro';
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
 
@@ -39,7 +42,9 @@ import PortalNav from '../../components/PortalNav.astro';
     async function load() {
       renderLoading(root, 'Loading requests…', { block: true });
       try {
-        const res = await fetch('/api/portal/service-requests');
+        const res = await apiFetch('/api/portal/service-requests', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -51,9 +56,10 @@ import PortalNav from '../../components/PortalNav.astro';
         root.innerHTML = rows.length
           ? `<ul class="space-y-2">${rows.map((r: { title: string; status: string }) => `<li>${r.title} · ${r.status}</li>`).join('')}</ul>`
           : 'No requests yet.';
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       }
     }
 
@@ -64,10 +70,11 @@ import PortalNav from '../../components/PortalNav.astro';
       clearErrorBanner(errors);
       setButtonBusy(submit, true, 'Submitting…');
       try {
-        const res = await fetch('/api/portal/service-requests', {
+        const res = await apiFetch('/api/portal/service-requests', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: data.get('title'), details: data.get('details') }),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -77,8 +84,9 @@ import PortalNav from '../../components/PortalNav.astro';
         if (status) status.textContent = 'Request submitted.';
         form.reset();
         load();
-      } catch {
-        showErrorBanner(errors, 'Could not submit request. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not submit request. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }

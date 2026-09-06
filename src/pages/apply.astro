@@ -83,7 +83,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
   {accepting ? <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer /> : null}
   {accepting ? (
     <script>
-      import { clearErrorBanner, setButtonBusy, showErrorBanner } from '../lib/uiFeedback.ts';
+      import { apiFetch, isApiFetchExhausted } from '../lib/apiFetch.ts';
+      import {
+        bindApiFetchStatus,
+        clearErrorBanner,
+        setButtonBusy,
+        showApiExhaustedBanner,
+        showErrorBanner,
+      } from '../lib/uiFeedback.ts';
 
       const form = document.getElementById('apply-form') as HTMLFormElement | null;
       const status = document.getElementById('apply-status');
@@ -113,10 +120,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
           turnstileToken: tokenInput?.value || '',
         };
         try {
-          const res = await fetch('/api/apply', {
+          const res = await apiFetch('/api/apply', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
+            onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
           });
           const json = await res.json().catch(() => ({}));
           if (!res.ok) {
@@ -125,8 +133,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '1x0000000
           }
           status.textContent = 'Application received. We will email you next steps.';
           form.reset();
-        } catch {
-          showErrorBanner(errors, 'Could not submit. Try again.');
+        } catch (err) {
+          if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+          else showErrorBanner(errors, 'Could not submit. Try again.');
         } finally {
           setButtonBusy(submit, false);
         }

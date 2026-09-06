@@ -14,10 +14,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="unit-loading" class="mt-6"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { mountOfficeBackLink, officeLinkFromHere } from '../../lib/officeNav.ts';
@@ -98,10 +101,17 @@ import OfficeNav from '../../components/OfficeNav.astro';
     }
 
     async function ensureOfficeAuth() {
-      const res = await fetch('/api/office/health');
-      if (res.ok) return true;
-      window.location.href = `/login?returnUrl=${safeReturnUrl()}`;
-      return false;
+      try {
+        const res = await apiFetch('/api/office/health');
+        if (res.ok) return true;
+        window.location.href = `/login?returnUrl=${safeReturnUrl()}`;
+        return false;
+      } catch (err) {
+        const host = document.getElementById('unit-errors');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(host, err);
+        else showErrorBanner(host, 'Office API is not reachable locally unless Functions are running.');
+        return false;
+      }
     }
 
     function formatMoney(cents: number) {
@@ -294,10 +304,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
         clearErrorBanner(errors);
         setButtonBusy(saveButton, true, 'Saving…');
         try {
-          const saveRes = await fetch(`/api/office/units/${encodeURIComponent(unitId || '')}`, {
+          const saveRes = await apiFetch(`/api/office/units/${encodeURIComponent(unitId || '')}`, {
             method: 'PATCH',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ available }),
+            onStatus: bindApiFetchStatus({ button: saveButton }),
           });
           const saveJson = await saveRes.json().catch(() => ({}));
           if (!saveRes.ok) {
@@ -307,8 +318,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
           if (status) {
             status.textContent = `Saved. Unit ${available ? 'is' : 'is not'} accepting applications.`;
           }
-        } catch {
-          showErrorBanner(errors, 'Could not save availability. Try again.');
+        } catch (err) {
+          if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+          else showErrorBanner(errors, 'Could not save availability. Try again.');
         } finally {
           setButtonBusy(saveButton, false);
         }
@@ -324,10 +336,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
           clearErrorBanner(errors);
           setButtonBusy(button, true, 'Updating…');
           try {
-            const res = await fetch(`/api/office/service-requests/${encodeURIComponent(requestId)}`, {
+            const res = await apiFetch(`/api/office/service-requests/${encodeURIComponent(requestId)}`, {
               method: 'PATCH',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ status: 'in_progress' }),
+              onStatus: bindApiFetchStatus({ button }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
@@ -335,8 +348,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
               return;
             }
             await loadUnit();
-          } catch {
-            showErrorBanner(errors, 'Could not update request. Try again.');
+          } catch (err) {
+            if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+            else showErrorBanner(errors, 'Could not update request. Try again.');
           } finally {
             setButtonBusy(button, false);
           }
@@ -355,7 +369,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
       if (panel) panel.classList.add('hidden');
 
       try {
-        const res = await fetch(`/api/office/units/${encodeURIComponent(unitId)}`);
+        const res = await apiFetch(`/api/office/units/${encodeURIComponent(unitId)}`, {
+          onStatus: bindApiFetchStatus({ loadingHost }),
+        });
         const json = (await res.json().catch(() => ({}))) as UnitDetail & { error?: string };
         if (loadingHost) loadingHost.innerHTML = '';
         if (!res.ok) {
@@ -372,9 +388,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
         panel.innerHTML = renderUnitPanel(json);
         await bindAvailabilityForm();
         bindServiceRequestActions();
-      } catch {
+      } catch (err) {
         if (loadingHost) loadingHost.innerHTML = '';
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
