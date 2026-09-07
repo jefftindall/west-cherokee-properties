@@ -16,13 +16,24 @@ import PortalNav from '../../components/PortalNav.astro';
     </div>
   </section>
   <script>
-    import { renderLoading, clearLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
+    import {
+      bindApiFetchStatus,
+      clearLoading,
+      renderLoading,
+      showApiExhaustedBanner,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
 
     const el = document.getElementById('portal-status');
     const errors = document.getElementById('portal-errors');
-    renderLoading(el, 'Loading your household…');
-    fetch('/api/portal/me')
-      .then(async (res) => {
+
+    async function load() {
+      renderLoading(el, 'Loading your household…');
+      try {
+        const res = await apiFetch('/api/portal/me', {
+          onStatus: bindApiFetchStatus({ loadingHost: el }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(el);
         if (!el) return;
@@ -34,10 +45,13 @@ import PortalNav from '../../components/PortalNav.astro';
         } else {
           showErrorBanner(errors, json.error || 'Could not load portal.');
         }
-      })
-      .catch(() => {
+      } catch (err) {
         clearLoading(el);
-        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
-      });
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
+      }
+    }
+
+    load();
   </script>
 </BaseLayout>

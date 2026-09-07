@@ -58,11 +58,14 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="pay-list" class="mt-4 text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearErrorBanner,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { mountOfficeBackLink, officeSuccessWithReturn } from '../../lib/officeNav.ts';
@@ -137,13 +140,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
     }
 
     async function loadLeases() {
-      const res = await fetch('/api/office/leases');
+      const res = await apiFetch('/api/office/leases');
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || 'Could not load leases.');
       leases = json.leases || [];
       units = json.units || [];
       people = json.people || [];
-      const dash = await fetch('/api/office/dashboard');
+      const dash = await apiFetch('/api/office/dashboard');
       const dashJson = await dash.json().catch(() => ({}));
       properties = dashJson.properties || [];
       populateLeases();
@@ -153,7 +156,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
     async function loadPayments() {
       renderLoading(list, 'Loading payments…', { block: true });
       try {
-        const res = await fetch('/api/office/payments');
+        const res = await apiFetch('/api/office/payments', {
+          onStatus: bindApiFetchStatus({ loadingHost: list }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(list);
         if (!list) return;
@@ -188,9 +193,10 @@ import OfficeNav from '../../components/OfficeNav.astro';
               )
               .join('')}</ul>`
           : '<p class="text-muted">No payments recorded yet.</p>';
-      } catch {
+      } catch (err) {
         clearLoading(list);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 
@@ -215,10 +221,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
       }
       setButtonBusy(submit, true, 'Recording…');
       try {
-        const res = await fetch('/api/office/payments', {
+        const res = await apiFetch('/api/office/payments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
         const json = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -230,8 +237,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
         }
         amountInput.value = '';
         loadPayments();
-      } catch {
-        showErrorBanner(errors, 'Could not record payment. Try again.');
+      } catch (err) {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not record payment. Try again.');
       } finally {
         setButtonBusy(submit, false);
       }
@@ -241,6 +249,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
 
     loadLeases()
       .then(() => loadPayments())
-      .catch(() => showErrorBanner(errors, 'Could not load lease data.'));
+      .catch((err) => {
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not load lease data.');
+      });
   </script>
 </BaseLayout>

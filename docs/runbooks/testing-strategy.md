@@ -1,11 +1,11 @@
 # Runbook: Testing strategy
 
-**Last updated:** 2026-08-29
+**Last updated:** 2026-09-06
 
 | Layer | When | Command |
 |-------|------|---------|
 | Static analysis | Every PR + `main` | `npm run lint` |
-| Unit tests | Every PR | `npm run test:api-auth && npm run test:api-store && npm run test:api-stripe && npm run test:api-contact && npm run test:staging-noindex` |
+| Unit tests | Every PR | `npm run test:api-auth && npm run test:api-store && npm run test:api-stripe && npm run test:api-contact && npm run test:api-fetch && npm run test:staging-noindex` |
 | Terraform plan | PRs touching `infra/` when `AZURE_TF_CLIENT_ID` exists | CI jobs `Plan staging` / `Plan prod` |
 | Smoke | After staging (and prod) deploy | `npm run test:smoke` |
 | Journeys | After staging smoke | `npm run test:journey` |
@@ -22,6 +22,7 @@ npm run test:api-auth
 npm run test:api-store
 npm run test:api-stripe
 npm run test:api-contact
+npm run test:api-fetch
 npm run test:staging-noindex
 
 # Local preview (after npm run build && npx astro preview --host 127.0.0.1 --port 4321)

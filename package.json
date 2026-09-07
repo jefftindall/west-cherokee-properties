@@ -19,6 +19,7 @@
     "test:api-store": "node --test api/src/lib/store.test.js api/src/lib/applications.test.js api/src/lib/leases.test.js api/src/lib/leaseDocument.test.js api/src/lib/legalDocuments.test.js api/src/lib/invoices.test.js api/src/lib/payments.test.js api/src/lib/serviceRequests.test.js api/src/lib/availability.test.js api/src/lib/unitHealth.test.js api/src/lib/unitDetail.test.js",
     "test:api-stripe": "node --test api/src/lib/stripeWebhook.test.js",
     "test:api-contact": "node --test api/src/lib/httpErrors.test.js",
+    "test:api-fetch": "node --experimental-strip-types --test src/lib/apiFetch.test.ts",
     "test:staging-noindex": "node --test scripts/apply-staging-noindex.test.mjs",
     "test:smoke": "playwright test --config=playwright.smoke.config.ts",
     "test:journey": "playwright test --config=playwright.journey.config.ts"

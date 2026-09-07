@@ -13,10 +13,13 @@ import OfficeNav from '../../components/OfficeNav.astro';
     <div id="list" class="mt-6 overflow-x-auto text-sm"></div>
   </section>
   <script>
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
+      bindApiFetchStatus,
       clearLoading,
       renderLoading,
       setButtonBusy,
+      showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { mountOfficeBackLink } from '../../lib/officeNav.ts';
@@ -27,7 +30,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
     async function load() {
       renderLoading(root, 'Loading applications…', { block: true });
       try {
-        const res = await fetch('/api/office/applications');
+        const res = await apiFetch('/api/office/applications', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -57,10 +62,11 @@ import OfficeNav from '../../components/OfficeNav.astro';
             const action = button.dataset.action;
             setButtonBusy(button, true, action === 'approve' ? 'Approving…' : 'Declining…');
             try {
-              const res = await fetch(`/api/office/applications/${id}`, {
+              const res = await apiFetch(`/api/office/applications/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: action === 'approve' ? 'approved' : 'declined' }),
+                onStatus: bindApiFetchStatus({ button }),
               });
               const json = await res.json().catch(() => ({}));
               if (!res.ok) {
@@ -68,16 +74,18 @@ import OfficeNav from '../../components/OfficeNav.astro';
                 return;
               }
               load();
-            } catch {
-              showErrorBanner(errors, 'Could not update application. Try again.');
+            } catch (err) {
+              if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+              else showErrorBanner(errors, 'Could not update application. Try again.');
             } finally {
               setButtonBusy(button, false);
             }
           });
         });
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Office API is not reachable locally unless Functions are running.');
       }
     }
 

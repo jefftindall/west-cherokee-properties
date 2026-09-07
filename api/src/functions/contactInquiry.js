@@ -10,6 +10,14 @@ const inquirySchema = z.object({
   email: z.email().max(320),
   message: z.string().trim().min(1).max(5000),
   turnstileToken: z.string().trim().min(1),
+  /** Client retry-session id from Report an issue (hidden field). */
+  clientCorrelationId: z
+    .string()
+    .trim()
+    .max(80)
+    .regex(/^[A-Za-z0-9._:-]+$/)
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
 });
 
 app.http('contactInquiry', {

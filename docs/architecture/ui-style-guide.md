@@ -1,10 +1,10 @@
 # UI style guide
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-30  
+**Last updated:** 2026-09-06  
 **Scope:** Brand tokens, layout primitives, buttons, and async interaction patterns for the public site, office, and portal.
 
-Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). Office back-navigation helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
+Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). Client `/api` calls use [`src/lib/apiFetch.ts`](../../src/lib/apiFetch.ts) (backoff/retry). Office back-navigation helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
 
 ## Brand positioning
 
@@ -82,6 +82,46 @@ clearLoading(hostElement);
 ```
 
 Keep the spinner visible for the full request duration. Clear it only after the promise resolves or rejects.
+
+## API fetch retry
+
+Azure Functions (and SQL after idle) can miss the first request. All browser calls to `/api/*` must use `apiFetch` from [`src/lib/apiFetch.ts`](../../src/lib/apiFetch.ts) instead of bare `fetch`.
+
+Behavior:
+
+1. Per-attempt timeout (default 30s) with exponential backoff between tries.
+2. Total wall-clock budget of **3 minutes** (`API_FETCH_MAX_TOTAL_MS`).
+3. After ~8s on the first try, or on any retry, update the loading/busy label via `onStatus` (e.g. “Taking longer than usual…” / “Still working — try 2…”).
+4. Retry on network failures, per-attempt timeouts, and HTTP 408 / 429 / 500 / 502 / 503 / 504.
+5. Do **not** retry ordinary 4xx/2xx application responses.
+6. Stop early after a few immediate connection or gateway failures (local Functions down / offline) so developers are not stuck for the full budget.
+7. When the budget is exhausted, throw `ApiFetchExhaustedError` (includes `correlationId`) and show `showApiExhaustedBanner` (**Report an issue** → `/contact?issue=api-timeout&from=…&cid=<client-correlation-id>`).
+8. Each attempt sends `X-Client-Correlation-Id`. Contact stores `cid` in a hidden `clientCorrelationId` field and includes it on submit so staff can match the report to retry logs.
+
+```typescript
+import { apiFetch, isApiFetchExhausted } from '../lib/apiFetch.ts';
+import {
+  bindApiFetchStatus,
+  renderLoading,
+  clearLoading,
+  showApiExhaustedBanner,
+  showErrorBanner,
+} from '../lib/uiFeedback.ts';
+
+renderLoading(host, 'Loading…', { block: true });
+try {
+  const res = await apiFetch('/api/office/dashboard', {
+    onStatus: bindApiFetchStatus({ loadingHost: host }),
+  });
+  // handle res…
+} catch (err) {
+  clearLoading(host);
+  if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+  else showErrorBanner(errors, 'Could not load.');
+}
+```
+
+Document download links and iframe `src` values that point at `/api/...` stay as plain URLs (browser navigation, not `apiFetch`).
 
 ## Busy buttons
 
@@ -208,12 +248,13 @@ status.innerHTML = officeSuccessWithReturn('Payment recorded for 2026-08.');
 ## Interaction checklist
 
 1. Show a spinner (loading region or busy button) as soon as the user acts or the page mounts data.
-2. Keep the spinner until the promise settles.
-3. On success, replace loading UI with results or a short inline confirmation.
-4. On failure, clear loading UI and call `showErrorBanner` with the API error text when available.
-5. Always reset busy buttons in `finally`.
+2. Use `apiFetch` for `/api/*` calls; pass `bindApiFetchStatus` so slow/retry messages replace the loading or busy label.
+3. Keep the spinner until the promise settles (including automatic retries within the 3-minute budget).
+4. On success, replace loading UI with results or a short inline confirmation.
+5. On failure, clear loading UI and call `showErrorBanner` with the API error text when available; on budget exhaustion use `showApiExhaustedBanner`.
+6. Always reset busy buttons in `finally`.
 
-All async pages under `src/pages/` use `src/lib/uiFeedback.ts` — follow that pattern for new UI.
+All async pages under `src/pages/` use `src/lib/apiFetch.ts` and `src/lib/uiFeedback.ts` — follow that pattern for new UI.
 
 ## CSS reference
 
@@ -227,4 +268,6 @@ All async pages under `src/pages/` use `src/lib/uiFeedback.ts` — follow that p
 | `wcp-alert` | Alert container |
 | `wcp-alert-error` | Error styling |
 | `wcp-alert-message` | Banner body text |
+| `wcp-alert-actions` | Optional action row under the message |
+| `wcp-alert-report` | Report an issue link after API budget exhaustion |
 | `wcp-alert-dismiss` | Dismiss control |

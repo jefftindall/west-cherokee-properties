@@ -11,7 +11,14 @@ import PortalNav from '../../components/PortalNav.astro';
     <div id="list" class="mt-6 text-sm"></div>
   </section>
   <script>
-    import { clearLoading, renderLoading, showErrorBanner } from '../../lib/uiFeedback.ts';
+    import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
+    import {
+      bindApiFetchStatus,
+      clearLoading,
+      renderLoading,
+      showApiExhaustedBanner,
+      showErrorBanner,
+    } from '../../lib/uiFeedback.ts';
 
     const root = document.getElementById('list');
     const errors = document.getElementById('inv-errors');
@@ -19,7 +26,9 @@ import PortalNav from '../../components/PortalNav.astro';
     async function load() {
       renderLoading(root, 'Loading invoices…', { block: true });
       try {
-        const res = await fetch('/api/portal/invoices');
+        const res = await apiFetch('/api/portal/invoices', {
+          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        });
         const json = await res.json().catch(() => ({}));
         clearLoading(root);
         if (!root) return;
@@ -44,9 +53,10 @@ import PortalNav from '../../components/PortalNav.astro';
             return `<li class="rounded border border-line bg-panel p-3">${i.id} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}${pay}${receipt}</li>`;
           })
           .join('')}</ul>`;
-      } catch {
+      } catch (err) {
         clearLoading(root);
-        showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       }
     }
 
