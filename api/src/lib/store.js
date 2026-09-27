@@ -25,6 +25,7 @@ export function createMemoryStore() {
     leases: [],
     invoices: [],
     payments: [],
+    paymentCheckouts: [],
     serviceRequests: [],
     tenantCommunicationState: [],
     communicationLog: [],
@@ -176,6 +177,37 @@ export function createMemoryStore() {
     },
     listPayments: async (invoiceId) =>
       clone(invoiceId ? db.payments.filter((p) => p.invoiceId === invoiceId) : db.payments),
+
+    async createPaymentCheckout(input) {
+      if (db.paymentCheckouts.some((row) => row.id === input.id)) {
+        throw new ConflictError('Checkout already recorded.');
+      }
+      const now = new Date().toISOString();
+      const row = {
+        id: input.id,
+        leaseId: input.leaseId,
+        personId: input.personId,
+        amountCents: Number(input.amountCents),
+        status: input.status || 'open',
+        stripePaymentIntentId: '',
+        unappliedCents: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.paymentCheckouts.push(row);
+      return clone(row);
+    },
+    getPaymentCheckout: async (id) => clone(db.paymentCheckouts.find((row) => row.id === id) || null),
+    listPaymentCheckouts: async (leaseId) => clone(db.paymentCheckouts.filter((row) => row.leaseId === leaseId)),
+    async transitionPaymentCheckout(id, fromStatuses, patch) {
+      const row = db.paymentCheckouts.find((entry) => entry.id === id);
+      if (!row || !fromStatuses.includes(row.status)) return null;
+      row.status = patch.status;
+      if (patch.stripePaymentIntentId != null) row.stripePaymentIntentId = patch.stripePaymentIntentId;
+      if (patch.unappliedCents != null) row.unappliedCents = patch.unappliedCents;
+      row.updatedAt = new Date().toISOString();
+      return clone(row);
+    },
 
     async createServiceRequest(input) {
       const row = normalizeServiceRequest({

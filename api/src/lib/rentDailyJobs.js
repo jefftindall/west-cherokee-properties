@@ -2,8 +2,8 @@ import { runRentInvoiceScheduler, runRentLateFeeScheduler } from './rentBilling.
 import { runRentCommunicationScheduler } from './rentCommunications.js';
 
 export const DEFAULT_STEPS = [
-  ['invoices', runRentInvoiceScheduler],
   ['lateFees', runRentLateFeeScheduler],
+  ['invoices', runRentInvoiceScheduler],
   ['communications', runRentCommunicationScheduler],
 ];
 
@@ -20,8 +20,9 @@ function isLocalDevelopment(env) {
 }
 
 /**
- * Runs billing steps in order inside one SQL wake window. Order matters: late fees land
- * before communications so tenant emails reflect the current balance. A failing step does
+ * Runs billing steps in order inside one SQL wake window. Order matters: late fees settle the
+ * current month before the next month's charge is posted, and both land before communications
+ * so tenant emails reflect the current balance. A failing step does
  * not skip later steps; the run still throws at the end so the invocation shows as failed.
  */
 export async function runDailyRentJobs(store, env = process.env, now = new Date(), steps = DEFAULT_STEPS) {

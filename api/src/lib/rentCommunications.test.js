@@ -71,16 +71,32 @@ test('previewCommunications lists eligible messages without sending', async () =
   assert.equal(preview.messages[0].messageType, 'due_reminder');
 });
 
-test('buildCommunicationMessage includes tenant name', () => {
+test('buildCommunicationMessage includes tenant name, portal link, and late-fee policy', () => {
   const content = buildCommunicationMessage({
     messageType: 'due_reminder',
     person: { displayName: 'Jordan' },
     period: { periodStart: '2026-08-01' },
     amountCents: 145000,
-    hostedUrl: 'https://pay.example.com',
+    payUrl: 'https://westcherokee.example/portal/invoices',
   });
   assert.match(content.plainText, /Jordan/);
   assert.match(content.subject, /Rent due today/);
+  assert.match(content.plainText, /https:\/\/westcherokee\.example\/portal\/invoices/);
+  assert.match(content.plainText, /end of the 4th, a \$50\.00 late fee/);
+  assert.match(content.plainText, /partial payments \(minimum \$100\.00\)/);
+});
+
+test('reminders use the remaining balance after a partial payment', () => {
+  const selected = selectCommunicationForLease({
+    lease: { id: 'lease-1', status: 'active', rentCents: 100000, terms: {} },
+    invoices: [
+      { id: 'inv-1', leaseId: 'lease-1', periodStart: '2026-08-01', periodEnd: '2026-08-31', amountCents: 100000, paidCents: 40000, status: 'open' },
+    ],
+    commState: null,
+    now: new Date('2026-08-03T17:00:00.000Z'),
+  });
+  assert.equal(selected.messageType, 'grace_warning');
+  assert.equal(selected.amountCents, 60000);
 });
 
 test('parseInvoiceIdsFromMetadata reads bundled invoice ids', () => {

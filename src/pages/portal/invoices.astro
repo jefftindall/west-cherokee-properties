@@ -3,63 +3,334 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import PortalNav from '../../components/PortalNav.astro';
 ---
 
-<BaseLayout title="Invoices" description="Pay rent and view receipts" noIndex hideNav hideFooter>
+<BaseLayout title="Rent & payments" description="See your balance and pay rent" noIndex hideNav hideFooter>
   <PortalNav />
   <section class="mx-auto max-w-3xl px-4 py-10">
-    <h1 class="font-display text-4xl text-pine">Invoices</h1>
+    <h1 class="font-display text-4xl text-pine">Rent &amp; payments</h1>
     <div id="inv-errors" class="mt-4"></div>
-    <div id="list" class="mt-6 text-sm"></div>
+    <div id="pay-return" class="mt-4 hidden rounded border border-line bg-panel p-3 text-sm" role="status"></div>
+
+    <div id="balance" class="mt-6"></div>
+
+    <form id="pay-form" class="mt-6 hidden space-y-4 rounded border border-line bg-panel p-4 text-sm" novalidate>
+      <h2 class="font-display text-2xl text-pine">Make a payment</h2>
+      <fieldset class="space-y-2">
+        <legend class="sr-only">Payment amount</legend>
+        <label class="flex items-center gap-2">
+          <input type="radio" name="choice" value="full" checked />
+          <span>Pay full balance (<span id="full-amount"></span>)</span>
+        </label>
+        <label id="partial-choice" class="flex items-center gap-2">
+          <input type="radio" name="choice" value="partial" />
+          <span>Pay a different amount</span>
+        </label>
+      </fieldset>
+      <div id="partial-fields" class="hidden space-y-2 pl-6">
+        <label class="block">
+          <span class="block font-medium">Amount (USD)</span>
+          <span class="mt-1 flex items-center gap-1">
+            <span aria-hidden="true">$</span>
+            <input
+              id="partial-amount"
+              name="amount"
+              inputmode="decimal"
+              autocomplete="off"
+              class="w-40 rounded border border-line px-2 py-1"
+              aria-describedby="partial-hint partial-warning"
+            />
+          </span>
+        </label>
+        <p id="partial-hint" class="text-muted"></p>
+        <p id="partial-warning" class="rounded border border-clay/40 bg-clay/10 p-2"></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="pay-submit" type="submit" class="btn-primary">Continue to secure payment</button>
+        <span id="pay-status" class="text-muted" aria-live="polite"></span>
+      </div>
+      <p class="text-muted">
+        You confirm the amount here. The payment page shows this exact amount and cannot be changed there.
+      </p>
+    </form>
+
+    <p id="pay-disabled" class="mt-6 hidden text-sm text-muted">
+      Online payment is not available yet. Contact the office to pay.
+    </p>
+
+    <h2 class="mt-10 font-display text-2xl text-pine">Charges</h2>
+    <div id="list" class="mt-4 text-sm"></div>
   </section>
   <script>
     import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
       bindApiFetchStatus,
+      clearErrorBanner,
       clearLoading,
       renderLoading,
+      setButtonBusy,
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
 
-    const root = document.getElementById('list');
-    const errors = document.getElementById('inv-errors');
+    type LateFee = {
+      status: 'in_grace' | 'late_fee_applied' | 'full_payment_processing' | 'late_fee_pending' | 'upcoming' | 'current';
+      lateFeeCents: number;
+      dueDate: string | null;
+      graceEndsOn: string | null;
+    };
+    type Balance = {
+      paymentsEnabled: boolean;
+      lease?: null;
+      minimumPaymentCents: number;
+      balanceCents: number;
+      processingCents: number;
+      payableCents: number;
+      minimumCents: number;
+      lateFee: LateFee | null;
+    };
+    type Invoice = {
+      id: string;
+      periodStart: string;
+      status: string;
+      amountCents: number;
+      paidCents?: number;
+      remainingCents?: number;
+      receiptUrl?: string;
+    };
 
-    async function load() {
-      renderLoading(root, 'Loading invoices…', { block: true });
+    const errors = document.getElementById('inv-errors');
+    const balanceHost = document.getElementById('balance');
+    const listHost = document.getElementById('list');
+    const payReturn = document.getElementById('pay-return');
+    const form = document.getElementById('pay-form') as HTMLFormElement | null;
+    const payDisabled = document.getElementById('pay-disabled');
+    const fullAmount = document.getElementById('full-amount');
+    const partialChoice = document.getElementById('partial-choice');
+    const partialFields = document.getElementById('partial-fields');
+    const partialInput = document.getElementById('partial-amount') as HTMLInputElement | null;
+    const partialHint = document.getElementById('partial-hint');
+    const partialWarning = document.getElementById('partial-warning');
+    const submit = document.getElementById('pay-submit') as HTMLButtonElement | null;
+    const payStatus = document.getElementById('pay-status');
+
+    let balance: Balance | null = null;
+
+    const money = (cents: number) =>
+      (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+    function longDate(iso: string) {
+      return new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
+
+    function monthLabel(iso: string) {
+      return new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    }
+
+    function lateFeeMessage(fee: LateFee | null): string {
+      if (!fee || fee.status === 'current' || !fee.dueDate || !fee.graceEndsOn) return '';
+      const amount = money(fee.lateFeeCents);
+      const due = longDate(fee.dueDate);
+      const graceEnd = longDate(fee.graceEndsOn);
+      const partialNote = 'Partial payments lower your balance but do not prevent the late fee.';
+      switch (fee.status) {
+        case 'upcoming':
+          return `Rent is due ${due}. Pay the full amount by the end of ${graceEnd} to avoid a ${amount} late fee. ${partialNote}`;
+        case 'in_grace':
+          return `Rent was due ${due}. Pay your full balance by the end of ${graceEnd} to avoid a ${amount} late fee. ${partialNote}`;
+        case 'late_fee_pending':
+          return `The grace period ended ${graceEnd} and rent is not paid in full, so a ${amount} late fee will be added.`;
+        case 'late_fee_applied':
+          return `A ${amount} late fee was added because rent was not paid in full by the end of ${graceEnd}.`;
+        case 'full_payment_processing':
+          return `Your full payment is processing. If it clears, no late fee is added. If the bank returns it, the ${amount} late fee applies.`;
+        default:
+          return '';
+      }
+    }
+
+    function showReturnMessage() {
+      const params = new URLSearchParams(location.search);
+      const result = params.get('payment');
+      if (!payReturn || !result) return;
+      payReturn.textContent =
+        result === 'success'
+          ? 'Thank you. Your payment was submitted. Card payments show here within a minute; bank payments can take a few business days to clear.'
+          : 'Payment was cancelled. No money was taken.';
+      payReturn.classList.remove('hidden');
+      history.replaceState(null, '', location.pathname);
+    }
+
+    function renderBalance(data: Balance) {
+      if (!balanceHost) return;
+      if (data.lease === null) {
+        balanceHost.innerHTML = '<p class="text-sm text-muted">No active lease is on file for this sign-in.</p>';
+        return;
+      }
+      const notice = lateFeeMessage(data.lateFee);
+      const processing = data.processingCents
+        ? `<p class="mt-1 text-muted">${money(data.processingCents)} is processing and will be applied when it clears.</p>`
+        : '';
+      balanceHost.innerHTML = `
+        <div class="rounded border border-line bg-panel p-4 text-sm">
+          <p class="text-muted">Balance due</p>
+          <p class="font-display text-3xl text-pine">${money(data.balanceCents)}</p>
+          ${processing}
+        </div>
+        ${notice ? `<p class="mt-4 rounded border border-clay/40 bg-clay/10 p-3 text-sm" role="note"><strong>Late fee policy:</strong> ${notice}</p>` : ''}`;
+    }
+
+    function renderForm(data: Balance) {
+      if (!form) return;
+      form.classList.add('hidden');
+      payDisabled?.classList.add('hidden');
+      if (data.lease === null || data.payableCents <= 0) return;
+      if (!data.paymentsEnabled) {
+        payDisabled?.classList.remove('hidden');
+        return;
+      }
+      if (fullAmount) fullAmount.textContent = money(data.payableCents);
+      const partialAllowed = data.payableCents > data.minimumPaymentCents;
+      partialChoice?.classList.toggle('hidden', !partialAllowed);
+      if (partialHint) {
+        partialHint.textContent = `Minimum ${money(data.minimumPaymentCents)}, up to ${money(data.payableCents)}.`;
+      }
+      if (partialWarning) {
+        const fee = data.lateFee;
+        const canStillAvoid = fee && (fee.status === 'in_grace' || fee.status === 'upcoming') && fee.graceEndsOn;
+        partialWarning.textContent = canStillAvoid
+          ? `A partial payment does not prevent the ${money(fee.lateFeeCents)} late fee. To avoid it, pay the full balance by the end of ${longDate(fee.graceEndsOn as string)}.`
+          : 'A partial payment lowers your balance. Any remaining balance is still due.';
+      }
+      form.classList.remove('hidden');
+    }
+
+    function selectedChoice() {
+      return (form?.querySelector('input[name="choice"]:checked') as HTMLInputElement | null)?.value || 'full';
+    }
+
+    function parseDollars(raw: string): number | null {
+      const cleaned = raw.replace(/[$,\s]/g, '');
+      if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+      return Math.round(Number(cleaned) * 100);
+    }
+
+    function amountToPay(): { cents: number } | { error: string } {
+      if (!balance) return { error: 'Balance is not loaded yet.' };
+      if (selectedChoice() === 'full') return { cents: balance.payableCents };
+      const cents = parseDollars(partialInput?.value || '');
+      if (cents === null) return { error: 'Enter an amount in dollars, like 250 or 250.00.' };
+      if (cents > balance.payableCents) return { error: `You can pay up to ${money(balance.payableCents)}.` };
+      if (cents < balance.minimumPaymentCents) {
+        return { error: `The minimum payment is ${money(balance.minimumPaymentCents)}.` };
+      }
+      return { cents };
+    }
+
+    form?.addEventListener('change', () => {
+      const partial = selectedChoice() === 'partial';
+      partialFields?.classList.toggle('hidden', !partial);
+      if (partial) partialInput?.focus();
+    });
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrorBanner(errors);
+      const amount = amountToPay();
+      if ('error' in amount) {
+        showErrorBanner(errors, amount.error);
+        return;
+      }
+      setButtonBusy(submit, true, 'Opening payment page…');
       try {
-        const res = await apiFetch('/api/portal/invoices', {
-          onStatus: bindApiFetchStatus({ loadingHost: root }),
+        const res = await apiFetch('/api/portal/payments/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amountCents: amount.cents }),
+          onStatus: bindApiFetchStatus({ button: submit, statusEl: payStatus }),
         });
         const json = await res.json().catch(() => ({}));
-        clearLoading(root);
-        if (!root) return;
-        if (!res.ok) {
-          showErrorBanner(errors, json.error || 'Could not load invoices.');
+        if (!res.ok || !json.url) {
+          setButtonBusy(submit, false);
+          showErrorBanner(errors, json.error || 'Could not start the payment. Please try again.');
           return;
         }
-        const rows = json.invoices || [];
-        if (!rows.length) {
-          root.textContent = 'No invoices yet.';
-          return;
-        }
-        root.innerHTML = `<ul class="space-y-3">${rows
-          .map((i: { id: string; status: string; amountCents: number; hostedInvoiceUrl?: string; receiptUrl?: string }) => {
-            const pay =
-              i.status !== 'paid' && i.hostedInvoiceUrl
-                ? `<a class="btn-primary ml-2 px-2 py-1 text-xs" href="${i.hostedInvoiceUrl}">Pay</a>`
-                : '';
-            const receipt = i.receiptUrl
-              ? `<a class="btn-ghost ml-2" href="${i.receiptUrl}">Receipt</a>`
-              : '';
-            return `<li class="rounded border border-line bg-panel p-3">${i.id} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}${pay}${receipt}</li>`;
-          })
-          .join('')}</ul>`;
+        location.assign(json.url);
       } catch (err) {
-        clearLoading(root);
+        setButtonBusy(submit, false);
+        if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+        else showErrorBanner(errors, 'Could not reach the payment service. Please try again.');
+      }
+    });
+
+    function renderInvoices(rows: Invoice[]) {
+      if (!listHost) return;
+      if (!rows.length) {
+        listHost.textContent = 'No charges yet.';
+        return;
+      }
+      const sorted = [...rows].sort((a, b) => b.periodStart.localeCompare(a.periodStart));
+      listHost.innerHTML = `<ul class="space-y-3">${sorted
+        .map((row) => {
+          const paid = row.paidCents ?? (row.status === 'paid' ? row.amountCents : 0);
+          const remaining = row.remainingCents ?? (row.status === 'paid' ? 0 : row.amountCents - paid);
+          const state =
+            row.status === 'paid'
+              ? 'Paid'
+              : paid > 0
+                ? `${money(paid)} paid · ${money(remaining)} due`
+                : `${money(remaining)} due`;
+          const receipt =
+            row.receiptUrl && /^https:\/\//.test(row.receiptUrl)
+              ? ` <a class="btn-ghost ml-2" href="${encodeURI(row.receiptUrl)}" rel="noopener">Receipt</a>`
+              : '';
+          return `<li class="flex flex-wrap items-center justify-between gap-2 rounded border border-line bg-panel p-3">
+            <span><strong>${monthLabel(row.periodStart)}</strong> · ${money(row.amountCents)}</span>
+            <span>${state}${receipt}</span>
+          </li>`;
+        })
+        .join('')}</ul>`;
+    }
+
+    async function load() {
+      renderLoading(balanceHost, 'Loading balance…', { block: true });
+      renderLoading(listHost, 'Loading charges…');
+      try {
+        const [balanceRes, invoicesRes] = await Promise.all([
+          apiFetch('/api/portal/balance', { onStatus: bindApiFetchStatus({ loadingHost: balanceHost }) }),
+          apiFetch('/api/portal/invoices', { onStatus: bindApiFetchStatus({ loadingHost: listHost }) }),
+        ]);
+        const balanceJson = await balanceRes.json().catch(() => ({}));
+        const invoicesJson = await invoicesRes.json().catch(() => ({}));
+        clearLoading(balanceHost);
+        clearLoading(listHost);
+        if (!balanceRes.ok) {
+          showErrorBanner(errors, balanceJson.error || 'Could not load your balance.');
+        } else {
+          balance = balanceJson as Balance;
+          renderBalance(balance);
+          renderForm(balance);
+        }
+        if (!invoicesRes.ok) {
+          showErrorBanner(errors, invoicesJson.error || 'Could not load charges.', { replace: false });
+        } else {
+          renderInvoices(invoicesJson.invoices || []);
+        }
+      } catch (err) {
+        clearLoading(balanceHost);
+        clearLoading(listHost);
         if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
         else showErrorBanner(errors, 'Portal API is not reachable locally unless Functions are running.');
       }
     }
 
+    showReturnMessage();
     load();
   </script>
 </BaseLayout>

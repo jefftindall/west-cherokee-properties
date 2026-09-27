@@ -69,6 +69,51 @@ test('recordLeasePeriodPayment creates invoice for back month then records payme
   assert.equal(findInvoiceForPeriod(invoices, lease.id, '2026-06-01', '2026-06-30')?.status, 'paid');
 });
 
+test('recordManualPayment accepts staff partial payments up to the remaining amount', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Casey', email: 'casey@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-10-falcon-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 100000,
+  });
+  const invoice = await store.createInvoice({
+    leaseId: lease.id,
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    amountCents: 100000,
+  });
+  const first = await recordManualPayment(store, {
+    invoice,
+    amountCents: 40000,
+    method: 'cash',
+    recordedBy: 'staff@example.com',
+  });
+  assert.equal(first.invoice.status, 'open');
+  assert.equal(first.invoice.paidCents, 40000);
+
+  await assert.rejects(
+    () =>
+      recordManualPayment(store, {
+        invoice: first.invoice,
+        amountCents: 60001,
+        method: 'cash',
+        recordedBy: 'staff@example.com',
+      }),
+    /more than the remaining \$600\.00/,
+  );
+
+  const second = await recordManualPayment(store, {
+    invoice: first.invoice,
+    method: 'check',
+    recordedBy: 'staff@example.com',
+  });
+  assert.equal(second.payment.amountCents, 60000);
+  assert.equal(second.invoice.status, 'paid');
+});
+
 test('recordManualPayment rejects already paid invoice', async () => {
   const store = createMemoryStore();
   const person = await store.upsertPerson({ displayName: 'Sam', email: 'sam@example.com' });

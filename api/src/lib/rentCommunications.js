@@ -1,16 +1,19 @@
 import { sendTenantEmail } from './acsNotify.js';
-import { monthLabel } from './unitHealth.js';
+import { invoiceRemainingCents } from './invoices.js';
 import {
   billingPeriodForSchedulingDay,
   currentMonthPeriodFromNow,
   nyTodayIso,
 } from './rentBilling.js';
+import { MIN_PARTIAL_PAYMENT_CENTS } from './rentPayments.js';
 import {
   expectedMonthlyChargeCents,
   GRACE_DAYS,
   invoiceHasLateFee,
   invoicesForCurrentMonth,
   invoicesForPeriod,
+  LATE_FEE_CENTS,
+  monthLabel,
   nyDateParts,
 } from './unitHealth.js';
 import { openInvoicesForLease } from './unitDetail.js';
@@ -43,24 +46,44 @@ function daysSinceIsoDate(fromIso, toIso) {
   return Math.round((to - from) / 86_400_000);
 }
 
-export function buildCommunicationMessage({ messageType, person, period, amountCents, hostedUrl }) {
+export function portalPayUrl(env = process.env) {
+  const site = String(env.SITE_URL || 'https://westcherokee.com').replace(/\/+$/, '');
+  return `${site}/portal/invoices`;
+}
+
+function dollars(cents) {
+  return `$${(Number(cents) / 100).toFixed(2)}`;
+}
+
+function ordinal(day) {
+  if (day >= 11 && day <= 13) return `${day}th`;
+  return `${day}${{ 1: 'st', 2: 'nd', 3: 'rd' }[day % 10] || 'th'}`;
+}
+
+export function buildCommunicationMessage({ messageType, person, period, amountCents, payUrl = portalPayUrl() }) {
   const tenant = person?.displayName || 'Tenant';
   const month = period ? monthLabel(period.periodStart) : 'this month';
-  const amount = `$${(Number(amountCents) / 100).toFixed(2)}`;
-  const payLine = hostedUrl ? `Pay online: ${hostedUrl}` : 'Sign in to the renter portal to pay.';
+  const amount = dollars(amountCents);
+  const graceEndDay = 1 + GRACE_DAYS;
+  const payLine = `Pay online in the renter portal: ${payUrl}`;
+  const policy =
+    `If the full balance is not paid by the end of the ${ordinal(graceEndDay)}, a ${dollars(LATE_FEE_CENTS)} late fee is added. ` +
+    `You can make partial payments (minimum ${dollars(MIN_PARTIAL_PAYMENT_CENTS)}) to lower your balance, ` +
+    'but only payment in full within the grace period avoids the late fee.';
+  const sign = '— West Cherokee Properties';
 
   const bodies = {
-    balance_overdue: `Hi ${tenant},\n\nYour rent for ${month} is past due, including any applicable late fee. Balance due: ${amount}.\n\n${payLine}\n\n— West Cherokee Properties`,
-    grace_warning: `Hi ${tenant},\n\nRent for ${month} was due on the 1st. Your account is in the grace period — please pay ${amount} soon to avoid a late fee.\n\n${payLine}\n\n— West Cherokee Properties`,
-    due_reminder: `Hi ${tenant},\n\nRent for ${month} is due today. Amount: ${amount}.\n\n${payLine}\n\n— West Cherokee Properties`,
-    invoice_notice: `Hi ${tenant},\n\nYour rent invoice for ${month} is ready. Amount due on the 1st: ${amount}.\n\n${payLine}\n\n— West Cherokee Properties`,
+    balance_overdue: `Hi ${tenant},\n\nYour rent for ${month} is past due, including any applicable late fee. Balance due: ${amount}.\n\n${payLine}\n\n${sign}`,
+    grace_warning: `Hi ${tenant},\n\nRent for ${month} was due on the 1st and your account is in the grace period. Balance due: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
+    due_reminder: `Hi ${tenant},\n\nRent for ${month} is due today. Balance due: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
+    invoice_notice: `Hi ${tenant},\n\nYour rent charge for ${month} has been posted. Balance due on the 1st: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
   };
 
   const subjects = {
     balance_overdue: `Past-due rent — ${month}`,
     grace_warning: `Rent grace period — ${month}`,
     due_reminder: `Rent due today — ${month}`,
-    invoice_notice: `Rent invoice — ${month}`,
+    invoice_notice: `Rent charge posted — ${month}`,
   };
 
   return {
@@ -85,8 +108,7 @@ export function selectCommunicationForLease({
   const unpaidMonth = monthInvoices.filter((invoice) => invoice.status !== 'paid');
   const baseCents = expectedMonthlyChargeCents(lease);
   const openAll = openInvoicesForLease(lease, invoices);
-  const totalDue = openAll.reduce((sum, row) => sum + Number(row.amountCents), 0);
-  const hostedUrl = monthInvoices.find((row) => row.hostedInvoiceUrl)?.hostedInvoiceUrl || '';
+  const totalDue = openAll.reduce((sum, row) => sum + invoiceRemainingCents(row), 0);
 
   const candidates = [];
 
@@ -99,7 +121,6 @@ export function selectCommunicationForLease({
         messageType: 'balance_overdue',
         period,
         amountCents: totalDue,
-        hostedUrl,
       });
     }
   }
@@ -109,7 +130,6 @@ export function selectCommunicationForLease({
       messageType: 'grace_warning',
       period,
       amountCents: totalDue,
-      hostedUrl,
     });
   }
 
@@ -118,7 +138,6 @@ export function selectCommunicationForLease({
       messageType: 'due_reminder',
       period,
       amountCents: totalDue,
-      hostedUrl,
     });
   }
 
@@ -132,12 +151,10 @@ export function selectCommunicationForLease({
     ).filter((invoice) => invoice.status !== 'paid');
     const alreadyNotified = commState?.lastInvoiceNoticePeriod === schedulePeriod.periodStart;
     if (scheduleInvoices.length > 0 && !alreadyNotified) {
-      const invoice = scheduleInvoices[0];
       candidates.push({
         messageType: 'invoice_notice',
         period: schedulePeriod,
-        amountCents: openAll.reduce((sum, row) => sum + Number(row.amountCents), 0) || invoice.amountCents,
-        hostedUrl: invoice.hostedInvoiceUrl || hostedUrl,
+        amountCents: totalDue || invoiceRemainingCents(scheduleInvoices[0]),
       });
     }
   }
@@ -169,7 +186,6 @@ export async function previewCommunications(store, now = new Date()) {
       person,
       period: selected.period,
       amountCents: selected.amountCents,
-      hostedUrl: selected.hostedUrl,
     });
     rows.push({
       leaseId: lease.id,
@@ -206,7 +222,7 @@ export async function runRentCommunicationScheduler(store, env = process.env, no
         person: { displayName: row.tenant, email: row.email },
         period: { periodStart: row.periodStart },
         amountCents: row.amountCents,
-        hostedUrl: '',
+        payUrl: portalPayUrl(env),
       });
 
       if (enabled || preview) {

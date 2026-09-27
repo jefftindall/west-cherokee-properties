@@ -12,14 +12,7 @@ import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.
 import { getStore } from '../lib/store.js';
 import { buildUnitDetail } from '../lib/unitDetail.js';
 import { buildDashboard, buildRentRoll } from '../lib/unitHealth.js';
-import {
-  createStripeInvoiceForRow,
-  rentPaymentsEnabled,
-  stripeWebhookClient,
-} from '../lib/stripeWebhook.js';
-import { ensureStripeCustomer } from '../lib/stripeCustomers.js';
 import { previewCommunications } from '../lib/rentCommunications.js';
-import { priorOpenInvoicesForLease } from '../lib/rentBilling.js';
 import {
   defaultPeriodForMonthInput,
   MANUAL_PAYMENT_METHODS,
@@ -512,27 +505,12 @@ app.http('officeInvoicesPost', {
       err.name = 'NotFoundError';
       throw err;
     }
-    let invoice = await store.createInvoice({
+    const invoice = await store.createInvoice({
       leaseId: lease.id,
       periodStart: body.periodStart,
       periodEnd: body.periodEnd,
       amountCents: monthlyChargeCents(lease.rentCents, lease.terms?.petCount),
     });
-    if (rentPaymentsEnabled() && process.env.STRIPE_SECRET_KEY?.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.includes('not_configured')) {
-      const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
-      const person = await store.getPerson(lease.personId);
-      const customerId = await ensureStripeCustomer({ stripe, store, person });
-      const allInvoices = await store.listInvoices();
-      const priorOpen = priorOpenInvoicesForLease(lease, allInvoices, invoice.periodStart);
-      const stripeInv = await createStripeInvoiceForRow({
-        stripe,
-        customerId,
-        appInvoice: invoice,
-        priorOpenInvoices: priorOpen,
-        siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
-      });
-      invoice = await store.updateInvoice(invoice.id, stripeInv);
-    }
     return jsonOk({ invoice }, 201);
   }),
 });

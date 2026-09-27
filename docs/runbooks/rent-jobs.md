@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-09-27
 
-Daily rent automation (invoices, late fees, tenant emails) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
+Daily rent automation (late fees, then next-month charges, then tenant emails) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
 
 | Environment | Schedule | How it runs |
 |-------------|----------|-------------|
@@ -11,7 +11,7 @@ Daily rent automation (invoices, late fees, tenant emails) runs in a standalone 
 
 One run executes three steps in order inside a single Azure SQL wake window: invoice creation (10 days before the 1st), late fees (after grace), then tenant communications. A failing step does not skip the later ones; the invocation is marked failed and the per-step summary is logged to Application Insights.
 
-What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (Stripe invoices), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (tenant email; preview delivers to `CONTACT_NOTIFY_EMAIL`). The job refuses to run if `SQL_CONNECTION_STRING` is missing.
+What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (portal online payment; charges are always created in SQL), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (tenant email; preview delivers to `CONTACT_NOTIFY_EMAIL`). The job refuses to run if `SQL_CONNECTION_STRING` is missing.
 
 ## Deploy
 

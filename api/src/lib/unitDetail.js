@@ -1,3 +1,4 @@
+import { invoiceRemainingCents } from './invoices.js';
 import {
   computeUnitHealth,
   currentMonthPeriod,
@@ -120,7 +121,7 @@ export function computeBalanceDue(lease, invoices) {
   if (!lease || lease.status !== 'active') return 0;
   return (invoices || [])
     .filter((invoice) => invoice.leaseId === lease.id && invoice.status !== 'paid')
-    .reduce((sum, invoice) => sum + Number(invoice.amountCents), 0);
+    .reduce((sum, invoice) => sum + invoiceRemainingCents(invoice), 0);
 }
 
 export function openInvoicesForLease(lease, invoices) {
@@ -206,6 +207,7 @@ export function buildUnitDetail({
   const balanceDueCents = computeBalanceDue(lease, invoices);
   const openInvoices = openInvoicesForLease(lease, invoices).map((invoice) => ({
     ...invoice,
+    remainingCents: invoiceRemainingCents(invoice),
     periodLabel: monthLabel(invoice.periodStart),
   }));
   const leaseProgress = computeLeaseProgress(lease, invoices, now);

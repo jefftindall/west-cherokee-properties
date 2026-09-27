@@ -3,9 +3,9 @@
 **Audience:** Agents, implementers  
 **Last updated:** 2026-08-29  
 **Status:** in_progress (prepare + print + download exist; in-app eSign does not)  
-**Depends on:** [georgia-residential-lease-template.md](../legal/georgia-residential-lease-template.md), office leases, portal lease download, Entra workforce + External ID, ACS email, Stripe as money SoT
+**Depends on:** [georgia-residential-lease-template.md](../legal/georgia-residential-lease-template.md), office leases, portal lease download, Entra workforce + External ID, ACS email, Azure SQL as the single source of truth for charges (Stripe processes payments)
 
-Staff prepare the Georgia lease in `/office`. Parties then **sign on this site** — not DocuSign, Adobe, or another envelope vendor. Wet-ink print remains a fallback. Azure SQL holds the operational lease row, `terms_json`, and per-party signature records. Stripe still invoices dwelling rent plus $20 per approved pet. This is not a second ledger.
+Staff prepare the Georgia lease in `/office`. Parties then **sign on this site** — not DocuSign, Adobe, or another envelope vendor. Wet-ink print remains a fallback. Azure SQL holds the operational lease row, `terms_json`, and per-party signature records. Monthly charges (dwelling rent plus $20 per approved pet) are billed from Azure SQL and paid through Stripe Checkout. This is not a second ledger.
 
 ## Signing model
 

@@ -1,4 +1,5 @@
-import { openInvoicesForLease } from './unitDetail.js';
+import { invoiceRemainingCents } from './invoices.js';
+import { processingCheckoutCents } from './rentPayments.js';
 import {
   activeLeasesForPeriod,
   expectedMonthlyChargeCents,
@@ -10,12 +11,6 @@ import {
   nyDateParts,
 } from './unitHealth.js';
 import { ensureInvoiceForLeasePeriod, findInvoiceForPeriod } from './payments.js';
-import {
-  createStripeInvoiceForRow,
-  rentPaymentsEnabled,
-  stripeWebhookClient,
-} from './stripeWebhook.js';
-import { ensureStripeCustomer } from './stripeCustomers.js';
 
 export const INVOICE_LEAD_DAYS = 10;
 
@@ -45,97 +40,50 @@ export function billingPeriodForSchedulingDay(now = new Date()) {
   };
 }
 
-export function priorOpenInvoicesForLease(lease, invoices, currentPeriodStart) {
-  return openInvoicesForLease(lease, invoices).filter(
-    (invoice) => invoice.periodStart < currentPeriodStart,
-  );
-}
-
-export function stripeReady(env = process.env) {
-  return (
-    rentPaymentsEnabled(env) &&
-    String(env.STRIPE_SECRET_KEY || '').startsWith('sk_') &&
-    !String(env.STRIPE_SECRET_KEY || '').includes('not_configured')
-  );
-}
-
-export async function runRentInvoiceScheduler(store, env = process.env, now = new Date()) {
+/** Creates next month's charge in SQL. Prior open balances stay on their own invoices. */
+export async function runRentInvoiceScheduler(store, _env = process.env, now = new Date()) {
   const period = billingPeriodForSchedulingDay(now);
   if (!period) {
-    return { skipped: true, reason: 'not_scheduling_day', created: 0, stripeCreated: 0 };
+    return { skipped: true, reason: 'not_scheduling_day', created: 0 };
   }
 
   const [leases, invoices] = await Promise.all([store.listLeases(), store.listInvoices()]);
   const active = activeLeasesForPeriod(leases, period.periodStart, period.periodEnd);
-  const stripe = stripeReady(env) ? stripeWebhookClient(env.STRIPE_SECRET_KEY) : null;
-  const siteUrl = env.SITE_URL || 'https://westcherokee.com';
 
   let created = 0;
-  let stripeCreated = 0;
   const errors = [];
 
   for (const lease of active) {
     try {
       const existing = findInvoiceForPeriod(invoices, lease.id, period.periodStart, period.periodEnd);
-      let invoice = await ensureInvoiceForLeasePeriod(store, lease, period.periodStart, period.periodEnd);
-      if (!existing && invoice.status !== 'paid') created += 1;
-
-      if (stripe && !invoice.stripeInvoiceId && invoice.status !== 'paid') {
-        const person = await store.getPerson(lease.personId);
-        if (!person?.email) continue;
-        const customerId = await ensureStripeCustomer({ stripe, store, person });
-        const priorOpen = priorOpenInvoicesForLease(lease, invoices, period.periodStart);
-        const stripeInv = await createStripeInvoiceForRow({
-          stripe,
-          customerId,
-          appInvoice: invoice,
-          priorOpenInvoices: priorOpen,
-          siteUrl,
-        });
-        invoice = await store.updateInvoice(invoice.id, stripeInv);
-        stripeCreated += 1;
-      }
+      if (existing) continue;
+      await ensureInvoiceForLeasePeriod(store, lease, period.periodStart, period.periodEnd);
+      created += 1;
     } catch (err) {
       errors.push({ leaseId: lease.id, error: err instanceof Error ? err.message : 'unknown' });
     }
   }
 
-  return {
-    skipped: false,
-    period,
-    created,
-    stripeCreated,
-    leaseCount: active.length,
-    errors,
-  };
+  return { skipped: false, period, created, leaseCount: active.length, errors };
 }
 
-export async function applyLateFeeToInvoice(store, stripe, invoice, lease) {
+export async function applyLateFeeToInvoice(store, invoice, lease) {
   const baseCents = expectedMonthlyChargeCents(lease);
   if (invoiceHasLateFee(invoice, baseCents) || invoice.status === 'paid') {
     return { applied: false, invoice };
   }
-  const nextAmount = Number(invoice.amountCents) + LATE_FEE_CENTS;
-  const updated = await store.updateInvoice(invoice.id, { amountCents: nextAmount });
-
-  if (stripe && updated.stripeInvoiceId) {
-    const person = await store.getPerson(lease.personId);
-    const customerId = String(person?.stripeCustomerId || '').trim();
-    if (customerId) {
-      await stripe.invoiceItems.create({
-        customer: customerId,
-        invoice: updated.stripeInvoiceId,
-        amount: LATE_FEE_CENTS,
-        currency: 'usd',
-        description: 'Late fee',
-      });
-    }
-  }
-
+  const updated = await store.updateInvoice(invoice.id, {
+    amountCents: Number(invoice.amountCents) + LATE_FEE_CENTS,
+  });
   return { applied: true, invoice: updated };
 }
 
-export async function runRentLateFeeScheduler(store, env = process.env, now = new Date()) {
+/**
+ * After grace, any current-month charge not paid in full gets the late fee. Partial payments do not
+ * prevent it. A submitted bank payment that covers the full remaining amount counts as paid on time;
+ * if it later fails, the next run applies the fee.
+ */
+export async function runRentLateFeeScheduler(store, _env = process.env, now = new Date()) {
   const { day } = nyDateParts(now);
   const graceEndDay = 1 + GRACE_DAYS;
   if (day <= graceEndDay) {
@@ -144,9 +92,9 @@ export async function runRentLateFeeScheduler(store, env = process.env, now = ne
 
   const [leases, invoices] = await Promise.all([store.listLeases(), store.listInvoices()]);
   const active = leases.filter((lease) => lease.status === 'active');
-  const stripe = stripeReady(env) ? stripeWebhookClient(env.STRIPE_SECRET_KEY) : null;
 
   let applied = 0;
+  let deferred = 0;
   const errors = [];
 
   for (const lease of active) {
@@ -154,8 +102,15 @@ export async function runRentLateFeeScheduler(store, env = process.env, now = ne
       const monthInvoices = invoicesForCurrentMonth(invoices, lease.id, now).filter(
         (invoice) => invoice.status !== 'paid',
       );
+      if (!monthInvoices.length) continue;
+      const remaining = monthInvoices.reduce((sum, invoice) => sum + invoiceRemainingCents(invoice), 0);
+      const processing = processingCheckoutCents(await store.listPaymentCheckouts(lease.id));
+      if (processing >= remaining) {
+        deferred += 1;
+        continue;
+      }
       for (const invoice of monthInvoices) {
-        const result = await applyLateFeeToInvoice(store, stripe, invoice, lease);
+        const result = await applyLateFeeToInvoice(store, invoice, lease);
         if (result.applied) applied += 1;
       }
     } catch (err) {
@@ -163,7 +118,7 @@ export async function runRentLateFeeScheduler(store, env = process.env, now = ne
     }
   }
 
-  return { skipped: false, applied, errors };
+  return { skipped: false, applied, deferred, errors };
 }
 
 export function currentMonthPeriodFromNow(now = new Date()) {

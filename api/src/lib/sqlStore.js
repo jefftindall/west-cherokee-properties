@@ -356,10 +356,11 @@ export function createSqlStore(connectionString) {
         .input('periodStart', sql.Date, row.periodStart)
         .input('periodEnd', sql.Date, row.periodEnd)
         .input('amountCents', sql.Int, row.amountCents)
+        .input('paidCents', sql.Int, row.paidCents)
         .input('status', sql.NVarChar, row.status)
         .query(
-          `INSERT INTO dbo.invoices (id, lease_id, period_start, period_end, amount_cents, status)
-           VALUES (@id, @leaseId, @periodStart, @periodEnd, @amountCents, @status)`,
+          `INSERT INTO dbo.invoices (id, lease_id, period_start, period_end, amount_cents, paid_cents, status)
+           VALUES (@id, @leaseId, @periodStart, @periodEnd, @amountCents, @paidCents, @status)`,
         );
       return row;
     },
@@ -369,7 +370,7 @@ export function createSqlStore(connectionString) {
         SELECT id, lease_id AS leaseId,
                CONVERT(char(10), period_start, 23) AS periodStart,
                CONVERT(char(10), period_end, 23) AS periodEnd,
-               amount_cents AS amountCents, status,
+               amount_cents AS amountCents, paid_cents AS paidCents, status,
                stripe_invoice_id AS stripeInvoiceId,
                hosted_invoice_url AS hostedInvoiceUrl,
                receipt_url AS receiptUrl
@@ -394,14 +395,75 @@ export function createSqlStore(connectionString) {
         .input('id', sql.NVarChar, id)
         .input('status', sql.NVarChar, next.status)
         .input('amountCents', sql.Int, next.amountCents)
+        .input('paidCents', sql.Int, Number(next.paidCents) || 0)
         .input('stripeInvoiceId', sql.NVarChar, next.stripeInvoiceId || '')
         .input('hostedInvoiceUrl', sql.NVarChar, next.hostedInvoiceUrl || '')
         .input('receiptUrl', sql.NVarChar, next.receiptUrl || '')
         .query(
-          `UPDATE dbo.invoices SET status = @status, amount_cents = @amountCents, stripe_invoice_id = @stripeInvoiceId,
-           hosted_invoice_url = @hostedInvoiceUrl, receipt_url = @receiptUrl WHERE id = @id`,
+          `UPDATE dbo.invoices SET status = @status, amount_cents = @amountCents, paid_cents = @paidCents,
+           stripe_invoice_id = @stripeInvoiceId, hosted_invoice_url = @hostedInvoiceUrl, receipt_url = @receiptUrl
+           WHERE id = @id`,
         );
       return next;
+    },
+    async createPaymentCheckout(input) {
+      const p = await pool();
+      await p
+        .request()
+        .input('id', sql.NVarChar, input.id)
+        .input('leaseId', sql.NVarChar, input.leaseId)
+        .input('personId', sql.NVarChar, input.personId)
+        .input('amountCents', sql.Int, input.amountCents)
+        .input('status', sql.NVarChar, input.status || 'open')
+        .query(
+          `INSERT INTO dbo.payment_checkouts (id, lease_id, person_id, amount_cents, status)
+           VALUES (@id, @leaseId, @personId, @amountCents, @status)`,
+        );
+      return this.getPaymentCheckout(input.id);
+    },
+    async getPaymentCheckout(id) {
+      const p = await pool();
+      const result = await p.request().input('id', sql.NVarChar, id).query(
+        `SELECT id, lease_id AS leaseId, person_id AS personId, amount_cents AS amountCents, status,
+                stripe_payment_intent_id AS stripePaymentIntentId, unapplied_cents AS unappliedCents,
+                created_at AS createdAt, updated_at AS updatedAt
+         FROM dbo.payment_checkouts WHERE id = @id`,
+      );
+      return result.recordset[0] || null;
+    },
+    async listPaymentCheckouts(leaseId) {
+      const p = await pool();
+      const result = await p.request().input('leaseId', sql.NVarChar, leaseId).query(
+        `SELECT id, lease_id AS leaseId, person_id AS personId, amount_cents AS amountCents, status,
+                stripe_payment_intent_id AS stripePaymentIntentId, unapplied_cents AS unappliedCents,
+                created_at AS createdAt, updated_at AS updatedAt
+         FROM dbo.payment_checkouts WHERE lease_id = @leaseId`,
+      );
+      return result.recordset;
+    },
+    /** Conditional status change; returns the updated row, or null when the row was not in fromStatuses. */
+    async transitionPaymentCheckout(id, fromStatuses, patch) {
+      const p = await pool();
+      const req = p
+        .request()
+        .input('id', sql.NVarChar, id)
+        .input('status', sql.NVarChar, patch.status)
+        .input('paymentIntentId', sql.NVarChar, patch.stripePaymentIntentId ?? null)
+        .input('unappliedCents', sql.Int, patch.unappliedCents ?? null);
+      const placeholders = fromStatuses.map((status, index) => {
+        req.input(`from${index}`, sql.NVarChar, status);
+        return `@from${index}`;
+      });
+      const result = await req.query(
+        `UPDATE dbo.payment_checkouts
+         SET status = @status,
+             stripe_payment_intent_id = COALESCE(@paymentIntentId, stripe_payment_intent_id),
+             unapplied_cents = COALESCE(@unappliedCents, unapplied_cents),
+             updated_at = SYSUTCDATETIME()
+         WHERE id = @id AND status IN (${placeholders.join(', ')})`,
+      );
+      if (!result.rowsAffected[0]) return null;
+      return this.getPaymentCheckout(id);
     },
     async createPayment(input) {
       const p = await pool();

@@ -83,8 +83,8 @@ test('applyLateFeeToInvoice is idempotent', async () => {
     periodEnd: '2026-08-31',
     amountCents: 120000,
   });
-  const first = await applyLateFeeToInvoice(store, null, invoice, lease);
-  const second = await applyLateFeeToInvoice(store, null, first.invoice, lease);
+  const first = await applyLateFeeToInvoice(store, invoice, lease);
+  const second = await applyLateFeeToInvoice(store, first.invoice, lease);
   assert.equal(first.applied, true);
   assert.equal(second.applied, false);
 });

@@ -3,9 +3,9 @@
 **Audience:** Agents, implementers  
 **Last updated:** 2026-09-27  
 **Status:** in_progress (phase 2 complete)  
-**Depends on:** phases 7–9 (leases, Stripe invoices, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
+**Depends on:** phases 7–9 (leases, payments, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
-Extend `/office` from thin CRUD into an operational portal: property dashboard with unit health (green / yellow / red), automated rent billing and tenant communications, lease renewal workflow starting 90 days before expiration, structured rent increases, service-request cost tracking, weekly staff digest emails, and workflow monitoring with SMS paging. Stripe remains the money system of record.
+Extend `/office` from thin CRUD into an operational portal: property dashboard with unit health (green / yellow / red), automated rent billing and tenant communications, lease renewal workflow starting 90 days before expiration, structured rent increases, service-request cost tracking, weekly staff digest emails, and workflow monitoring with SMS paging. Azure SQL is the single source of truth for charges, payments, and balances; Stripe only processes payments.
 
 ## Unit health (R/Y/G)
 
@@ -29,7 +29,7 @@ Operational data is entered in the office UI; automations read Azure SQL. Staff 
 | Marketing copy | Git | PR |
 | Unit availability | SQL `units.available` (new) | Office unit toggle at turnover |
 | Applications / leases / rent schedule | SQL | `/office/applications`, `/office/renters`, `/office/leases` (create, edit, end) |
-| Invoices / payments | Stripe + SQL mirror | Portal pay automated; **manual** cash/check/Zelle via `/office/payments` |
+| Charges / payments / balances | SQL (single source of truth) | Portal pay through Stripe Checkout, applied automatically; **manual** cash/check/Zelle (full or partial) via `/office/payments` |
 | Service request cost | SQL | Required when closing a request |
 
 **Move-in:** approve application (unit picker, dates, rent) or create lease → rent schedule row(s) → activate → billing automates.  
@@ -58,12 +58,13 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-02 | done | 1 | Property-centric dashboard UI; unit manage panel or `/office/unit?unitId=` shell |
 | OP-03 | done | 1 | Deep-link login: `returnUrl` on `/login`, anonymous shells, Playwright smoke |
 | OP-04 | done | 1 | `people.stripe_customer_id`; `units.available` in SQL; apply reads SQL not seed |
-| OP-05 | done | 2 | Invoice step of timer `rentDailyJobs` — invoice 10 days before due; idempotent; reuse Stripe customer |
-| OP-06 | done | 2 | Late-fee step of `rentDailyJobs` — $50 fee after grace; Stripe due date = 1st |
+| OP-05 | done | 2 | Charge step of timer `rentDailyJobs` — SQL charge 10 days before due; idempotent; no Stripe Invoicing |
+| OP-06 | done | 2 | Late-fee step of `rentDailyJobs` (runs first) — $50 fee after grace unless the month is paid in full; deferred while a full bank payment is processing |
 | OP-07 | done | 2 | Communications step of `rentDailyJobs` — sole tenant email path; daily send gate |
 | OP-23 | done | 2 | Standalone Flex Consumption Function App `func-wcp-jobs-<env>` for timers (SWA managed Functions are HTTP-only); one combined daily run in prod, staging on demand; CD deploys; budget $70 |
+| OP-24 | done | 2 | Portal payments: `invoices.paid_cents`, `payment_checkouts`; `GET /api/portal/balance`, `POST /api/portal/payments/checkout`; tenant picks full or partial amount on our site (minimum $100, or full balance if smaller); fixed-amount Stripe Checkout; oldest-first allocation; late-fee policy shown on the page and in emails |
 | OP-08 | done | 2 | `tenant_communication_state`, `communication_log`; state-driven messages (no catch-up queue) |
-| OP-09 | done | 2 | Comms preview API + flags `RENT_COMMUNICATIONS_*`; disable Stripe customer invoice emails |
+| OP-09 | done | 2 | Comms preview API + flags `RENT_COMMUNICATIONS_*`; emails link to the portal pay page |
 | OP-10 | planned | 3 | `lease_renewals` + `rent_schedule_entries`; update data-persistence.md |
 | OP-11 | planned | 3 | Lease manage shell `/office/lease-manage?leaseId=` — schedule, renewal, documents |
 | OP-12 | planned | 3 | Application approve modal; renewal watcher at 90 days |
@@ -84,15 +85,17 @@ Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 �
 
 | When | Action |
 |------|--------|
-| 10 days before due | Create Stripe invoice (schedule rent + pets + open balance); no tenant email from invoice job |
+| 10 days before due | Create the month's charge in SQL (rent + pets); `invoice_notice` email with the total balance and portal link |
 | Due (1st) | Comm scheduler: `due_reminder` if unpaid |
 | 2nd–4th | Comm scheduler: `grace_warning` (max one email/day) |
-| After grace, still unpaid | Late-fee job adds $50; comm scheduler: `balance_overdue` |
+| After grace, not paid in full | Late-fee job adds $50 (partial payments do not prevent it); comm scheduler: `balance_overdue` |
 | Weekly after late fee | `balance_overdue` if ≥7 days since last and gate allows |
 
 **One email per lease per calendar day:** state-driven selection (priority: balance_overdue → grace_warning → due_reminder → invoice_notice). No queue replay after outage. Transactional gate before ACS send; unique constraint on `(lease_id, sent_date)`.
 
-**Feature flags:** `RENT_PAYMENTS_ENABLED` (existing), `RENT_COMMUNICATIONS_ENABLED`, `RENT_COMMUNICATIONS_PREVIEW` (staff inbox until reviewed).
+**Portal payments:** tenants choose the amount on `/portal/invoices`, never in Stripe. Minimum $100 (or the full balance when it is under $100), maximum the balance not already processing. The page and the due/grace emails state that the $50 late fee is added unless the full balance is paid by the end of the grace period.
+
+**Feature flags:** `RENT_PAYMENTS_ENABLED` (online payment), `RENT_COMMUNICATIONS_ENABLED`, `RENT_COMMUNICATIONS_PREVIEW` (staff inbox until reviewed).
 
 **Hosting:** timers cannot run on SWA managed Functions (HTTP triggers only). All timers live in `api/src/jobs/` and deploy to the standalone jobs Function App ([rent-jobs.md](../runbooks/rent-jobs.md)). Prefer adding steps to an existing daily run over new timers: each separate run wakes Azure SQL serverless for another 60-minute auto-pause window. Future timers (OP-15 digest, OP-17 monitor) follow the same pattern.
 
@@ -104,7 +107,9 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 - [x] Dashboard shows expected vs collected rent for current and next month with progress bars
 - [x] Staff can record manual/back payments for active leases via `/office/payments`
-- [x] Active leases get Stripe invoices 10 days before the 1st, including prior open balances
+- [x] Active leases get a SQL charge 10 days before the 1st; balance includes prior open charges
+- [x] Tenants can pay in full or in part (minimum $100) from the portal; amount is fixed before Stripe Checkout
+- [x] Portal and emails state that only payment in full within the grace period avoids the late fee
 - [x] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
 - [x] At most one tenant email per lease per day; no catch-up backlog after outage
 - [x] Late fee auto-applies after grace; red only after fee applied
@@ -125,6 +130,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-09-27: Dropped Stripe Invoicing. Azure SQL is the single source of truth for charges, payments, and balances; Stripe only processes payments. Added portal partial payments (OP-24) with a $100 minimum, fixed-amount Checkout, and clear late-fee policy. Daily job order is now late fees → charges → communications.
 - 2026-09-27: Timer hosting — replaced three `app.timer` schedulers in the SWA API (which never fire on managed Functions) with one `rentDailyJobs` timer on a standalone Flex Consumption Function App (OP-23). Prod runs daily at 13:00 UTC; staging disabled and run on demand. Budget raised to $70 for the SQL wake window.
 - 2026-08-31: Phase 2 — automated rent billing timers (`rentInvoiceScheduler`, `rentLateFeeScheduler`), tenant comms (`rentCommunicationScheduler`, `tenant_communication_state`, `communication_log`), `GET /api/office/communications/preview`, `RENT_COMMUNICATIONS_*` flags, Stripe invoice due-on-1st with prior-balance line items and no auto-email.
 - 2026-08-30: Unit manage detail — `GET /api/office/units/{id}` enriched payload; `/office/unit` shows balance, lease progress, payments, and service requests.
