@@ -95,6 +95,8 @@ resource "azurerm_static_web_app" "main" {
     SQL_CONNECTION_STRING        = azurerm_key_vault_secret.sql_connection_string.value
     STRIPE_SECRET_KEY            = data.azurerm_key_vault_secret.stripe_secret_key.value
     RENT_PAYMENTS_ENABLED        = var.rent_payments_enabled ? "true" : "false"
+    RENT_COMMUNICATIONS_ENABLED  = var.rent_communications_enabled ? "true" : "false"
+    RENT_COMMUNICATIONS_PREVIEW  = var.rent_communications_preview ? "true" : "false"
     EXTERNAL_ID_CLIENT_ID        = data.azurerm_key_vault_secret.external_id_client_id.value
     EXTERNAL_ID_CLIENT_SECRET    = data.azurerm_key_vault_secret.external_id_client_secret.value
     APPINSIGHTS_CONNECTIONSTRING = azurerm_application_insights.main.connection_string

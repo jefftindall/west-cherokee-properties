@@ -17,6 +17,9 @@ import {
   rentPaymentsEnabled,
   stripeWebhookClient,
 } from '../lib/stripeWebhook.js';
+import { ensureStripeCustomer } from '../lib/stripeCustomers.js';
+import { previewCommunications } from '../lib/rentCommunications.js';
+import { priorOpenInvoicesForLease } from '../lib/rentBilling.js';
 import {
   defaultPeriodForMonthInput,
   MANUAL_PAYMENT_METHODS,
@@ -518,16 +521,14 @@ app.http('officeInvoicesPost', {
     if (rentPaymentsEnabled() && process.env.STRIPE_SECRET_KEY?.startsWith('sk_') && !process.env.STRIPE_SECRET_KEY.includes('not_configured')) {
       const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
       const person = await store.getPerson(lease.personId);
-      let customerId = String(person.stripeCustomerId || '').trim();
-      if (!customerId) {
-        const customer = await stripe.customers.create({ email: person.email, name: person.displayName });
-        customerId = customer.id;
-        await store.updatePersonStripeCustomerId(person.id, customerId);
-      }
+      const customerId = await ensureStripeCustomer({ stripe, store, person });
+      const allInvoices = await store.listInvoices();
+      const priorOpen = priorOpenInvoicesForLease(lease, allInvoices, invoice.periodStart);
       const stripeInv = await createStripeInvoiceForRow({
         stripe,
         customerId,
         appInvoice: invoice,
+        priorOpenInvoices: priorOpen,
         siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
       });
       invoice = await store.updateInvoice(invoice.id, stripeInv);
@@ -565,5 +566,18 @@ app.http('officeAccess', {
   handler: wrap(async (request) => {
     await permissionGate(request, PERMISSION.USERS_READ);
     return jsonOk({ users: await getStore().listOfficeUsers() });
+  }),
+});
+
+app.http('officeCommunicationsPreview', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'office/communications/preview',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.INVOICES_READ);
+    const url = new URL(request.url);
+    const dateParam = url.searchParams.get('date');
+    const now = dateParam ? new Date(`${dateParam}T17:00:00.000Z`) : new Date();
+    return jsonOk(await previewCommunications(getStore(), now));
   }),
 });

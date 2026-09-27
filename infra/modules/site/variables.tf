@@ -70,6 +70,16 @@ variable "rent_payments_enabled" {
   default = false
 }
 
+variable "rent_communications_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "rent_communications_preview" {
+  type    = bool
+  default = false
+}
+
 variable "shared_key_vault_name" {
   type    = string
   default = "kv-wcp-shared"

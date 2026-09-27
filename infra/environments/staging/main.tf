@@ -60,19 +60,21 @@ provider "github" {
 module "site" {
   source = "../../modules/site"
 
-  environment              = "staging"
-  location                 = var.location
-  sql_location             = var.sql_location
-  create_sql               = var.create_sql
-  custom_domain            = var.custom_domain
-  custom_hostnames         = var.custom_hostnames
-  github_owner             = var.github_owner
-  github_owner_id          = var.github_owner_id
-  github_repo              = var.github_repo
-  github_repo_id           = var.github_repo_id
-  manage_github_actions    = var.manage_github_actions
-  rent_payments_enabled    = true
-  purge_protection_enabled = false
+  environment                 = "staging"
+  location                    = var.location
+  sql_location                = var.sql_location
+  create_sql                  = var.create_sql
+  custom_domain               = var.custom_domain
+  custom_hostnames            = var.custom_hostnames
+  github_owner                = var.github_owner
+  github_owner_id             = var.github_owner_id
+  github_repo                 = var.github_repo
+  github_repo_id              = var.github_repo_id
+  manage_github_actions       = var.manage_github_actions
+  rent_payments_enabled       = true
+  rent_communications_enabled = false
+  rent_communications_preview = true
+  purge_protection_enabled    = false
 }
 
 output "static_web_app_default_host_name" {

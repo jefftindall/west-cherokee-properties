@@ -2,6 +2,7 @@ import { monthlyChargeCents } from './leaseTerms.js';
 import { markInvoicePaid } from './invoices.js';
 import { monthPeriodForOffset } from './unitHealth.js';
 import { rentPaymentsEnabled, stripeWebhookClient } from './stripeWebhook.js';
+import { ensureStripeCustomer } from './stripeCustomers.js';
 
 export const MANUAL_PAYMENT_METHODS = ['cash', 'check', 'zelle', 'ach', 'other'];
 
@@ -121,12 +122,7 @@ export async function recordLeasePeriodPayment(store, {
     const { createStripeInvoiceForRow } = await import('./stripeWebhook.js');
     const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
     const person = await store.getPerson(lease.personId);
-    let customerId = String(person.stripeCustomerId || '').trim();
-    if (!customerId) {
-      const customer = await stripe.customers.create({ email: person.email, name: person.displayName });
-      customerId = customer.id;
-      await store.updatePersonStripeCustomerId(person.id, customerId);
-    }
+    const customerId = await ensureStripeCustomer({ stripe, store, person });
     const stripeInv = await createStripeInvoiceForRow({
       stripe,
       customerId,

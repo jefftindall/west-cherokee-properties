@@ -64,33 +64,75 @@ export async function applyStripeLedgerEvent(event, store = getStore()) {
   if (!paid?.stripeInvoiceId) return { applied: false, kind: 'ignored' };
   const invoice = await store.getInvoiceByStripeId(paid.stripeInvoiceId);
   if (!invoice) return { applied: false, kind: 'unmatched' };
-  await markInvoicePaid(store, invoice, {
-    amountCents: paid.amountCents,
-    stripeEventId: event.id,
-    stripePaymentIntentId: paid.paymentIntentId,
-    receiptUrl: paid.receiptUrl,
-  });
+
+  const metadata = event?.data?.object?.metadata || {};
+  const invoiceIds = parseInvoiceIdsFromMetadata(metadata);
+  const targets = invoiceIds.length ? invoiceIds : [invoice.id];
+
+  for (const invoiceId of targets) {
+    const row = invoiceId === invoice.id ? invoice : await store.getInvoice(invoiceId);
+    if (!row || row.status === 'paid') continue;
+    await markInvoicePaid(store, row, {
+      amountCents: row.amountCents,
+      stripeEventId: `${event.id}:${invoiceId}`,
+      stripePaymentIntentId: paid.paymentIntentId,
+      receiptUrl: paid.receiptUrl,
+    });
+  }
+
   if (paid.hostedInvoiceUrl) {
     await store.updateInvoice(invoice.id, { hostedInvoiceUrl: paid.hostedInvoiceUrl });
   }
-  return { applied: true, kind: 'paid' };
+  return { applied: true, kind: 'paid', invoiceCount: targets.length };
 }
 
 export function rentPaymentsEnabled(env = process.env) {
   return String(env.RENT_PAYMENTS_ENABLED || '').toLowerCase() === 'true';
 }
 
+export function rentCommunicationsEnabled(env = process.env) {
+  return String(env.RENT_COMMUNICATIONS_ENABLED || '').toLowerCase() === 'true';
+}
+
+export function rentCommunicationsPreview(env = process.env) {
+  return String(env.RENT_COMMUNICATIONS_PREVIEW || '').toLowerCase() === 'true';
+}
+
+function dueDateUnixForPeriodStart(periodStart) {
+  const [year, month] = String(periodStart).split('-').map(Number);
+  return Math.floor(Date.UTC(year, month - 1, 1, 17, 0, 0) / 1000);
+}
+
+function invoiceIdsMetadata(primaryId, priorOpenInvoices = []) {
+  const ids = [primaryId, ...priorOpenInvoices.map((row) => row.id)].filter(Boolean);
+  return [...new Set(ids)].join(',');
+}
+
 /**
  * Create a Stripe Invoice for an app invoice. Omits payment_method_types
- * so Dashboard-configured methods appear dynamically.
+ * so Dashboard-configured methods appear dynamically. Does not email the tenant
+ * (WCP comms scheduler is the sole tenant email path).
  */
-export async function createStripeInvoiceForRow({ stripe, customerId, appInvoice, siteUrl }) {
+export async function createStripeInvoiceForRow({
+  stripe,
+  customerId,
+  appInvoice,
+  priorOpenInvoices = [],
+  siteUrl,
+}) {
+  const dueDate = dueDateUnixForPeriodStart(appInvoice.periodStart);
   const invoice = await stripe.invoices.create({
     customer: customerId,
     collection_method: 'send_invoice',
-    days_until_due: 14,
-    metadata: { wcp_invoice_id: appInvoice.id, wcp_lease_id: appInvoice.leaseId },
+    auto_advance: false,
+    due_date: dueDate,
+    metadata: {
+      wcp_invoice_id: appInvoice.id,
+      wcp_invoice_ids: invoiceIdsMetadata(appInvoice.id, priorOpenInvoices),
+      wcp_lease_id: appInvoice.leaseId,
+    },
   });
+
   await stripe.invoiceItems.create({
     customer: customerId,
     invoice: invoice.id,
@@ -98,9 +140,27 @@ export async function createStripeInvoiceForRow({ stripe, customerId, appInvoice
     currency: 'usd',
     description: `Rent ${appInvoice.periodStart} – ${appInvoice.periodEnd}`,
   });
-  const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
+
+  for (const prior of priorOpenInvoices) {
+    await stripe.invoiceItems.create({
+      customer: customerId,
+      invoice: invoice.id,
+      amount: prior.amountCents,
+      currency: 'usd',
+      description: `Prior balance ${prior.periodStart}`,
+      metadata: { wcp_invoice_id: prior.id },
+    });
+  }
+
+  const finalized = await stripe.invoices.finalizeInvoice(invoice.id, { auto_advance: false });
   return {
     stripeInvoiceId: finalized.id,
     hostedInvoiceUrl: finalized.hosted_invoice_url || `${siteUrl}/portal/invoices`,
   };
+}
+
+export function parseInvoiceIdsFromMetadata(metadata = {}) {
+  const combined = String(metadata.wcp_invoice_ids || metadata.wcp_invoice_id || '').trim();
+  if (!combined) return [];
+  return [...new Set(combined.split(',').map((id) => id.trim()).filter(Boolean))];
 }

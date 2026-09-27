@@ -26,6 +26,8 @@ export function createMemoryStore() {
     invoices: [],
     payments: [],
     serviceRequests: [],
+    tenantCommunicationState: [],
+    communicationLog: [],
   };
 
   return {
@@ -191,6 +193,54 @@ export function createMemoryStore() {
       if (!row) throw new NotFoundError('Service request not found.');
       Object.assign(row, patch);
       return clone(row);
+    },
+
+    async getTenantCommunicationState(leaseId) {
+      return clone(db.tenantCommunicationState.find((row) => row.leaseId === leaseId) || null);
+    },
+    async upsertTenantCommunicationState(leaseId, patch) {
+      let row = db.tenantCommunicationState.find((entry) => entry.leaseId === leaseId);
+      if (!row) {
+        row = {
+          leaseId,
+          lastSentDate: '',
+          lastMessageType: '',
+          lastInvoiceNoticePeriod: '',
+          updatedAt: new Date().toISOString(),
+        };
+        db.tenantCommunicationState.push(row);
+      }
+      Object.assign(row, patch, { leaseId, updatedAt: new Date().toISOString() });
+      return clone(row);
+    },
+    async getCommunicationLogForLeaseDate(leaseId, sentDate) {
+      return clone(
+        db.communicationLog.find((row) => row.leaseId === leaseId && row.sentDate === sentDate) || null,
+      );
+    },
+    async createCommunicationLog(input) {
+      const row = {
+        id: input.id || `comm-${randomUUID()}`,
+        leaseId: input.leaseId,
+        messageType: input.messageType,
+        sentDate: input.sentDate,
+        recipientEmail: input.recipientEmail,
+        preview: Boolean(input.preview),
+        periodStart: input.periodStart || '',
+        createdAt: input.createdAt || new Date().toISOString(),
+      };
+      const dup = db.communicationLog.find(
+        (entry) => entry.leaseId === row.leaseId && entry.sentDate === row.sentDate,
+      );
+      if (dup) throw new ConflictError('A communication was already logged for that lease and date.');
+      db.communicationLog.push(row);
+      return clone(row);
+    },
+    async listCommunicationLog(leaseId) {
+      const rows = leaseId
+        ? db.communicationLog.filter((row) => row.leaseId === leaseId)
+        : db.communicationLog;
+      return clone(rows);
     },
 
     listOfficeUsers: async () => clone(db.officeUsers),

@@ -393,11 +393,12 @@ export function createSqlStore(connectionString) {
         .request()
         .input('id', sql.NVarChar, id)
         .input('status', sql.NVarChar, next.status)
+        .input('amountCents', sql.Int, next.amountCents)
         .input('stripeInvoiceId', sql.NVarChar, next.stripeInvoiceId || '')
         .input('hostedInvoiceUrl', sql.NVarChar, next.hostedInvoiceUrl || '')
         .input('receiptUrl', sql.NVarChar, next.receiptUrl || '')
         .query(
-          `UPDATE dbo.invoices SET status = @status, stripe_invoice_id = @stripeInvoiceId,
+          `UPDATE dbo.invoices SET status = @status, amount_cents = @amountCents, stripe_invoice_id = @stripeInvoiceId,
            hosted_invoice_url = @hostedInvoiceUrl, receipt_url = @receiptUrl WHERE id = @id`,
         );
       return next;
@@ -497,6 +498,104 @@ export function createSqlStore(connectionString) {
         .input('status', sql.NVarChar, next.status)
         .query('UPDATE dbo.service_requests SET status = @status WHERE id = @id');
       return next;
+    },
+    async getTenantCommunicationState(leaseId) {
+      const p = await pool();
+      const result = await p.request().input('leaseId', sql.NVarChar, leaseId).query(`
+        SELECT lease_id AS leaseId,
+               CONVERT(char(10), last_sent_date, 23) AS lastSentDate,
+               last_message_type AS lastMessageType,
+               CONVERT(char(10), last_invoice_notice_period, 23) AS lastInvoiceNoticePeriod,
+               updated_at AS updatedAt
+        FROM dbo.tenant_communication_state WHERE lease_id = @leaseId`);
+      return result.recordset[0] || null;
+    },
+    async upsertTenantCommunicationState(leaseId, patch) {
+      const p = await pool();
+      const current = (await this.getTenantCommunicationState(leaseId)) || {
+        leaseId,
+        lastSentDate: '',
+        lastMessageType: '',
+        lastInvoiceNoticePeriod: '',
+      };
+      const next = { ...current, ...patch, leaseId };
+      await p
+        .request()
+        .input('leaseId', sql.NVarChar, leaseId)
+        .input('lastSentDate', sql.Date, next.lastSentDate || null)
+        .input('lastMessageType', sql.NVarChar, next.lastMessageType || '')
+        .input('lastInvoiceNoticePeriod', sql.Date, next.lastInvoiceNoticePeriod || null)
+        .query(
+          `MERGE dbo.tenant_communication_state AS t
+           USING (SELECT @leaseId AS lease_id) AS s ON t.lease_id = s.lease_id
+           WHEN MATCHED THEN UPDATE SET last_sent_date = @lastSentDate, last_message_type = @lastMessageType,
+             last_invoice_notice_period = @lastInvoiceNoticePeriod, updated_at = SYSUTCDATETIME()
+           WHEN NOT MATCHED THEN INSERT (lease_id, last_sent_date, last_message_type, last_invoice_notice_period)
+             VALUES (@leaseId, @lastSentDate, @lastMessageType, @lastInvoiceNoticePeriod);`,
+        );
+      return next;
+    },
+    async getCommunicationLogForLeaseDate(leaseId, sentDate) {
+      const p = await pool();
+      const result = await p
+        .request()
+        .input('leaseId', sql.NVarChar, leaseId)
+        .input('sentDate', sql.Date, sentDate)
+        .query(
+          `SELECT id, lease_id AS leaseId, message_type AS messageType,
+                  CONVERT(char(10), sent_date, 23) AS sentDate,
+                  recipient_email AS recipientEmail, preview,
+                  CONVERT(char(10), period_start, 23) AS periodStart,
+                  created_at AS createdAt
+           FROM dbo.communication_log WHERE lease_id = @leaseId AND sent_date = @sentDate`,
+        );
+      return result.recordset[0] || null;
+    },
+    async createCommunicationLog(input) {
+      const p = await pool();
+      const id = input.id || `comm-${randomUUID()}`;
+      try {
+        await p
+          .request()
+          .input('id', sql.NVarChar, id)
+          .input('leaseId', sql.NVarChar, input.leaseId)
+          .input('messageType', sql.NVarChar, input.messageType)
+          .input('sentDate', sql.Date, input.sentDate)
+          .input('recipientEmail', sql.NVarChar, input.recipientEmail)
+          .input('preview', sql.Bit, input.preview ? 1 : 0)
+          .input('periodStart', sql.Date, input.periodStart || null)
+          .query(
+            `INSERT INTO dbo.communication_log (id, lease_id, message_type, sent_date, recipient_email, preview, period_start)
+             VALUES (@id, @leaseId, @messageType, @sentDate, @recipientEmail, @preview, @periodStart)`,
+          );
+      } catch (err) {
+        if (String(err.message || '').includes('ux_comm_log_lease_sent_date')) {
+          throw new ConflictError('A communication was already logged for that lease and date.');
+        }
+        throw err;
+      }
+      return { id, ...input };
+    },
+    async listCommunicationLog(leaseId) {
+      const p = await pool();
+      const result = leaseId
+        ? await p.request().input('leaseId', sql.NVarChar, leaseId).query(
+            `SELECT id, lease_id AS leaseId, message_type AS messageType,
+                    CONVERT(char(10), sent_date, 23) AS sentDate,
+                    recipient_email AS recipientEmail, preview,
+                    CONVERT(char(10), period_start, 23) AS periodStart,
+                    created_at AS createdAt
+             FROM dbo.communication_log WHERE lease_id = @leaseId ORDER BY sent_date DESC`,
+          )
+        : await p.request().query(
+            `SELECT id, lease_id AS leaseId, message_type AS messageType,
+                    CONVERT(char(10), sent_date, 23) AS sentDate,
+                    recipient_email AS recipientEmail, preview,
+                    CONVERT(char(10), period_start, 23) AS periodStart,
+                    created_at AS createdAt
+             FROM dbo.communication_log ORDER BY sent_date DESC`,
+          );
+      return result.recordset;
     },
     async listOfficeUsers() {
       const p = await pool();

@@ -169,3 +169,29 @@ BEGIN
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   );
 END;
+
+IF OBJECT_ID('dbo.tenant_communication_state', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.tenant_communication_state (
+    lease_id NVARCHAR(64) NOT NULL PRIMARY KEY REFERENCES dbo.leases(id),
+    last_sent_date DATE NULL,
+    last_message_type NVARCHAR(32) NULL,
+    last_invoice_notice_period DATE NULL,
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END;
+
+IF OBJECT_ID('dbo.communication_log', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.communication_log (
+    id NVARCHAR(64) NOT NULL PRIMARY KEY,
+    lease_id NVARCHAR(64) NOT NULL REFERENCES dbo.leases(id),
+    message_type NVARCHAR(32) NOT NULL,
+    sent_date DATE NOT NULL,
+    recipient_email NVARCHAR(320) NOT NULL,
+    preview BIT NOT NULL CONSTRAINT df_comm_log_preview DEFAULT 0,
+    period_start DATE NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT ux_comm_log_lease_sent_date UNIQUE (lease_id, sent_date)
+  );
+END;

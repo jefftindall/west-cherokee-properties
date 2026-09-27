@@ -1,8 +1,8 @@
 # Office operations portal
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-30  
-**Status:** in_progress (phase 1 complete)  
+**Last updated:** 2026-08-31  
+**Status:** in_progress (phase 2 complete)  
 **Depends on:** phases 7–9 (leases, Stripe invoices, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
 Extend `/office` from thin CRUD into an operational portal: property dashboard with unit health (green / yellow / red), automated rent billing and tenant communications, lease renewal workflow starting 90 days before expiration, structured rent increases, service-request cost tracking, weekly staff digest emails, and workflow monitoring with SMS paging. Stripe remains the money system of record.
@@ -58,11 +58,11 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-02 | done | 1 | Property-centric dashboard UI; unit manage panel or `/office/unit?unitId=` shell |
 | OP-03 | done | 1 | Deep-link login: `returnUrl` on `/login`, anonymous shells, Playwright smoke |
 | OP-04 | done | 1 | `people.stripe_customer_id`; `units.available` in SQL; apply reads SQL not seed |
-| OP-05 | planned | 2 | Timer `rentInvoiceScheduler` — invoice 10 days before due; idempotent; reuse Stripe customer |
-| OP-06 | planned | 2 | Timer `rentLateFeeScheduler` — $50 fee after grace; Stripe due date = 1st |
-| OP-07 | planned | 2 | Timer `rentCommunicationScheduler` — sole tenant email path; daily send gate |
-| OP-08 | planned | 2 | `tenant_communication_state`, `communication_log`; state-driven messages (no catch-up queue) |
-| OP-09 | planned | 2 | Comms preview API + flags `RENT_COMMUNICATIONS_*`; disable Stripe customer invoice emails |
+| OP-05 | done | 2 | Timer `rentInvoiceScheduler` — invoice 10 days before due; idempotent; reuse Stripe customer |
+| OP-06 | done | 2 | Timer `rentLateFeeScheduler` — $50 fee after grace; Stripe due date = 1st |
+| OP-07 | done | 2 | Timer `rentCommunicationScheduler` — sole tenant email path; daily send gate |
+| OP-08 | done | 2 | `tenant_communication_state`, `communication_log`; state-driven messages (no catch-up queue) |
+| OP-09 | done | 2 | Comms preview API + flags `RENT_COMMUNICATIONS_*`; disable Stripe customer invoice emails |
 | OP-10 | planned | 3 | `lease_renewals` + `rent_schedule_entries`; update data-persistence.md |
 | OP-11 | planned | 3 | Lease manage shell `/office/lease-manage?leaseId=` — schedule, renewal, documents |
 | OP-12 | planned | 3 | Application approve modal; renewal watcher at 90 days |
@@ -101,10 +101,10 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 - [x] Dashboard shows expected vs collected rent for current and next month with progress bars
 - [x] Staff can record manual/back payments for active leases via `/office/payments`
-- [ ] Active leases get Stripe invoices 10 days before the 1st, including prior open balances
-- [ ] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
-- [ ] At most one tenant email per lease per day; no catch-up backlog after outage
-- [ ] Late fee auto-applies after grace; red only after fee applied
+- [x] Active leases get Stripe invoices 10 days before the 1st, including prior open balances
+- [x] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
+- [x] At most one tenant email per lease per day; no catch-up backlog after outage
+- [x] Late fee auto-applies after grace; red only after fee applied
 - [ ] 90-day renewal workflow; rent schedule drives invoice amounts
 - [ ] Service request close requires cost; maintenance totals by property
 - [ ] Weekly digest to property managers when `OFFICE_DIGEST_ENABLED=true`
@@ -122,6 +122,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-08-31: Phase 2 — automated rent billing timers (`rentInvoiceScheduler`, `rentLateFeeScheduler`), tenant comms (`rentCommunicationScheduler`, `tenant_communication_state`, `communication_log`), `GET /api/office/communications/preview`, `RENT_COMMUNICATIONS_*` flags, Stripe invoice due-on-1st with prior-balance line items and no auto-email.
 - 2026-08-30: Unit manage detail — `GET /api/office/units/{id}` enriched payload; `/office/unit` shows balance, lease progress, payments, and service requests.
 - 2026-08-30: Manual payments — `POST /api/office/payments`, `/office/payments` UI, dashboard rent roll with progress bars.
 - 2026-08-30: Manual data entry — `/office/renters` create/edit (`POST/PATCH /api/office/people`); `/office/leases` existing-renter picker, edit, and end-lease (`status` on lease API).
