@@ -5,6 +5,10 @@ node_modules/
 dist/
 .astro/
 
+# Rent jobs Function App package (scripts/package-rent-jobs.mjs)
+.build/
+rent-jobs-package/
+
 # Environment variables / secrets
 .env
 .env.*

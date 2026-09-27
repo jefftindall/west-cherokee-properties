@@ -1,7 +1,7 @@
 # Data persistence
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-31  
+**Last updated:** 2026-09-27  
 **Scope:** Where durable data lives, record shapes, and access paths.
 
 There is **one application database**: Azure SQL (`wcp`). Git holds public brand copy only. Stripe is the money system of record.
@@ -50,7 +50,7 @@ Schema: [`api/src/db/schema.sql`](../../api/src/db/schema.sql). Applied on first
 | `applications` | Status: submitted, in_review, approved, declined, withdrawn |
 | `leases` | Filtered unique index: one **active** lease per unit. `terms_json` holds the filled Georgia lease (occupants, deposit, pets), including optional `coTenants` (adult signer records with `personId`, contact) and `additionalOccupants` (name + relationship). Staff create/update via `/office/leases` (`POST/PATCH /api/office/leases`); `status` is `active` or `ended`. Office prepares the document; office and the renter download the same current copy. Stripe still invoices monthly charge (dwelling rent + $20/pet). |
 | `invoices` / `payments` | Stripe ids and `receipt_url` for portal/Stripe payments; `payments.source` is `stripe` or `manual` with `method` (`cash`, `check`, `zelle`, `ach`, `other`), optional `notes`, and `recorded_by` (staff email). Staff record off-portal rent via `POST /api/office/payments` (creates the period invoice when missing). Stripe remains the books for card/ACH portal pay; manual rows mirror cash-equivalent collection in SQL. Automated billing timers create period invoices 10 NY days before the 1st, roll prior open balances onto Stripe line items, apply a $50 late fee after grace, and mirror payment via webhook metadata (`wcp_invoice_ids`). |
-| `tenant_communication_state` | Per-lease comms cursor: last send date/type and last invoice-notice period. Updated by `rentCommunicationScheduler`. |
+| `tenant_communication_state` | Per-lease comms cursor: last send date/type and last invoice-notice period. Updated by the communications step of `rentDailyJobs`. |
 | `communication_log` | Audit of tenant rent emails; unique `(lease_id, sent_date)` enforces at most one email per lease per NY calendar day. |
 | `service_requests` | Scoped to `person_id` |
 | `office_users` | Workforce identities + roles JSON |
@@ -69,5 +69,5 @@ Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemor
 - Office `POST /api/office/payments` records manual rent (cash, check, Zelle, etc.) against an existing invoice or a lease + month (back payments within the lease term). When a Stripe invoice exists for that row, the API marks it paid out-of-band in Stripe.
 - Office `GET /api/office/dashboard` includes `rentRoll` (expected vs collected for the current and next calendar month in America/New_York).
 - Office `GET /api/office/units/{id}` returns unit detail for the manage panel: health, `balanceDueCents`, open invoices, lease progress, recent payments for the active lease, open service requests, and closed requests from the last 90 days (by `created_at` until `closed_at` exists).
-- Timers (`rentInvoiceScheduler`, `rentLateFeeScheduler`, `rentCommunicationScheduler`) run daily on SWA managed Functions. Invoice creation is gated by `RENT_PAYMENTS_ENABLED`; tenant email is gated by `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (preview delivers to `CONTACT_NOTIFY_EMAIL`). Staff preview queued messages via `GET /api/office/communications/preview?date=YYYY-MM-DD`.
+- One timer, `rentDailyJobs`, runs invoices → late fees → communications in order on a standalone Flex Consumption Function App (`func-wcp-jobs-<env>`), because SWA managed Functions are HTTP-only. It shares `api/src/lib` and reads/writes the same Azure SQL database as the SWA API, via its own `SQL_CONNECTION_STRING` app setting. Prod runs daily at 13:00 UTC; staging is disabled and runs on demand ([rent-jobs.md](../runbooks/rent-jobs.md)). One combined run keeps SQL serverless awake for a single auto-pause window. Invoice creation is gated by `RENT_PAYMENTS_ENABLED`; tenant email is gated by `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (preview delivers to `CONTACT_NOTIFY_EMAIL`). Staff preview queued messages via `GET /api/office/communications/preview?date=YYYY-MM-DD`.
 - CI Terraform plan downloads `GITHUB-APP-PRIVATE-KEY` from `kv-wcp-shared` (`az keyvault secret download`, never `show`) and mints a short-lived installation token. App id and installation id are repo Actions variables (`GH_APP_ID`, `GH_APP_INSTALLATION_ID`) set by `scripts/register-wcp-github-app.mjs`, not by Terraform. The PEM is not a Terraform data source. Local bootstrap apply still uses `GH_TOKEN` from `gh auth token` to write `AZURE_TF_*` Actions variables.

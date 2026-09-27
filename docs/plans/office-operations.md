@@ -1,7 +1,7 @@
 # Office operations portal
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-08-31  
+**Last updated:** 2026-09-27  
 **Status:** in_progress (phase 2 complete)  
 **Depends on:** phases 7–9 (leases, Stripe invoices, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
@@ -58,9 +58,10 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-02 | done | 1 | Property-centric dashboard UI; unit manage panel or `/office/unit?unitId=` shell |
 | OP-03 | done | 1 | Deep-link login: `returnUrl` on `/login`, anonymous shells, Playwright smoke |
 | OP-04 | done | 1 | `people.stripe_customer_id`; `units.available` in SQL; apply reads SQL not seed |
-| OP-05 | done | 2 | Timer `rentInvoiceScheduler` — invoice 10 days before due; idempotent; reuse Stripe customer |
-| OP-06 | done | 2 | Timer `rentLateFeeScheduler` — $50 fee after grace; Stripe due date = 1st |
-| OP-07 | done | 2 | Timer `rentCommunicationScheduler` — sole tenant email path; daily send gate |
+| OP-05 | done | 2 | Invoice step of timer `rentDailyJobs` — invoice 10 days before due; idempotent; reuse Stripe customer |
+| OP-06 | done | 2 | Late-fee step of `rentDailyJobs` — $50 fee after grace; Stripe due date = 1st |
+| OP-07 | done | 2 | Communications step of `rentDailyJobs` — sole tenant email path; daily send gate |
+| OP-23 | done | 2 | Standalone Flex Consumption Function App `func-wcp-jobs-<env>` for timers (SWA managed Functions are HTTP-only); one combined daily run in prod, staging on demand; CD deploys; budget $70 |
 | OP-08 | done | 2 | `tenant_communication_state`, `communication_log`; state-driven messages (no catch-up queue) |
 | OP-09 | done | 2 | Comms preview API + flags `RENT_COMMUNICATIONS_*`; disable Stripe customer invoice emails |
 | OP-10 | planned | 3 | `lease_renewals` + `rent_schedule_entries`; update data-persistence.md |
@@ -93,6 +94,8 @@ Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 �
 
 **Feature flags:** `RENT_PAYMENTS_ENABLED` (existing), `RENT_COMMUNICATIONS_ENABLED`, `RENT_COMMUNICATIONS_PREVIEW` (staff inbox until reviewed).
 
+**Hosting:** timers cannot run on SWA managed Functions (HTTP triggers only). All timers live in `api/src/jobs/` and deploy to the standalone jobs Function App ([rent-jobs.md](../runbooks/rent-jobs.md)). Prefer adding steps to an existing daily run over new timers: each separate run wakes Azure SQL serverless for another 60-minute auto-pause window. Future timers (OP-15 digest, OP-17 monitor) follow the same pattern.
+
 ## Workflow monitoring
 
 Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_incidents`. Site admin SMS via `ALERT-PHONE` immediately, then at most once per 24 hours until resolved. `WORKFLOW_PAGING_ENABLED` / `WORKFLOW_PAGING_PREVIEW`. Azure Monitor action group as backup if pager path fails.
@@ -122,6 +125,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-09-27: Timer hosting — replaced three `app.timer` schedulers in the SWA API (which never fire on managed Functions) with one `rentDailyJobs` timer on a standalone Flex Consumption Function App (OP-23). Prod runs daily at 13:00 UTC; staging disabled and run on demand. Budget raised to $70 for the SQL wake window.
 - 2026-08-31: Phase 2 — automated rent billing timers (`rentInvoiceScheduler`, `rentLateFeeScheduler`), tenant comms (`rentCommunicationScheduler`, `tenant_communication_state`, `communication_log`), `GET /api/office/communications/preview`, `RENT_COMMUNICATIONS_*` flags, Stripe invoice due-on-1st with prior-balance line items and no auto-email.
 - 2026-08-30: Unit manage detail — `GET /api/office/units/{id}` enriched payload; `/office/unit` shows balance, lease progress, payments, and service requests.
 - 2026-08-30: Manual payments — `POST /api/office/payments`, `/office/payments` UI, dashboard rent roll with progress bars.

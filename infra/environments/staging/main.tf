@@ -74,6 +74,7 @@ module "site" {
   rent_payments_enabled       = true
   rent_communications_enabled = false
   rent_communications_preview = true
+  rent_jobs_schedule_enabled  = false
   purge_protection_enabled    = false
 }
 

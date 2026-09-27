@@ -1,6 +1,6 @@
 # Runbook: Rotate secrets
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-27
 
 If a secret is leaked in logs, a PR, or chat, rotate it **before** re-running the job. Never print values (`az keyvault secret show --query value`, `echo`, `set -x`, or `az ... -o json` on a secret). Log **names** only.
 
@@ -10,8 +10,8 @@ If a secret is leaked in logs, a PR, or chat, rotate it **before** re-running th
 |------|--------|
 | Subscription | `5f82b068-cbaa-40bf-9d56-e9932a64a41c` |
 | Shared vault | `kv-wcp-shared` (`rg-wcp-shared`) |
-| Staging vault / SWA / SQL | `kv-wcp-staging` / `swa-wcp-staging` / `sql-wcp-staging` (`rg-wcp-staging`) |
-| Prod vault / SWA / SQL | `kv-wcp-prod` / `swa-wcp-prod` / `sql-wcp-prod` (`rg-wcp-prod`) |
+| Staging vault / SWA / SQL / jobs | `kv-wcp-staging` / `swa-wcp-staging` / `sql-wcp-staging` / `func-wcp-jobs-staging` (`rg-wcp-staging`) |
+| Prod vault / SWA / SQL / jobs | `kv-wcp-prod` / `swa-wcp-prod` / `sql-wcp-prod` / `func-wcp-jobs-prod` (`rg-wcp-prod`) |
 | SQL admin / database | `wcpadmin` / `wcp` |
 | GitHub repo | `jefftindall/west-cherokee-properties` |
 
@@ -90,7 +90,7 @@ CI mints a short-lived installation token from `GITHUB-APP-PRIVATE-KEY`. Generat
 
 To recreate the whole app, re-run `node scripts/register-wcp-github-app.mjs` after bootstrap placeholders exist.
 
-After `TURNSTILE-SECRET-KEY`, `ACS-*`, `ALLOWED-USER-IDS`, External ID, or Stripe keys change, re-apply the env stacks so SWA `app_settings` pick them up (those values are interpolated at apply time):
+After `TURNSTILE-SECRET-KEY`, `ACS-*`, `ALLOWED-USER-IDS`, External ID, or Stripe keys change, re-apply the env stacks so SWA and rent jobs Function App (`func-wcp-jobs-<env>`: Stripe, `ACS-*`, `SITE-CONTACT-EMAIL`) `app_settings` pick them up (those values are interpolated at apply time):
 
 ```bash
 cd infra/environments/staging
@@ -158,7 +158,7 @@ az keyvault secret set --vault-name kv-wcp-staging --name SQL-ADMIN-PASSWORD --f
 
 rm -f /tmp/wcp-secret.txt
 
-# 3. Re-apply staging (writes SQL-CONNECTION-STRING + SWA SQL_CONNECTION_STRING) or set SWA SQL_CONNECTION_STRING the same no-print way as above.
+# 3. Re-apply staging (writes SQL-CONNECTION-STRING + SWA and func-wcp-jobs SQL_CONNECTION_STRING). Prefer the apply: setting only SWA by hand leaves the rent jobs app on the old password.
 cd infra/environments/staging
 terraform apply -input=false
 ```

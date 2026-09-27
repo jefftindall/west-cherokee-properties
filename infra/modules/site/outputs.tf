@@ -10,6 +10,10 @@ output "static_web_app_default_host_name" {
   value = azurerm_static_web_app.main.default_host_name
 }
 
+output "rent_jobs_function_app_name" {
+  value = azurerm_function_app_flex_consumption.rent_jobs.name
+}
+
 output "key_vault_name" {
   value = azurerm_key_vault.main.name
 }
