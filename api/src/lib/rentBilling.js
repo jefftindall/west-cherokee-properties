@@ -26,7 +26,7 @@ export function addDaysToIsoDate(isoDate, days) {
   return date.toISOString().slice(0, 10);
 }
 
-/** When today is exactly 10 NY days before the 1st, return that billing month. */
+/** When today (Eastern time) is exactly 10 days before the 1st, return that billing month. */
 export function billingPeriodForSchedulingDay(now = new Date()) {
   const today = nyTodayIso(now);
   const dueDate = addDaysToIsoDate(today, INVOICE_LEAD_DAYS);
