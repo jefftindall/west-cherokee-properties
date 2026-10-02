@@ -28,7 +28,7 @@ app.http('stripeWebhook', {
       return { status: verified.status, jsonBody: { error: 'Webhook rejected', correlationId } };
     }
     try {
-      const result = await applyStripeLedgerEvent(verified.event, getStore());
+      const result = await applyStripeLedgerEvent(verified.event, getStore(), stripe);
       context.log('stripeWebhook', { ...stripeEventTelemetry(verified.event), kind: result.kind });
       return jsonOk({ ok: true, kind: result.kind, correlationId });
     } catch (err) {

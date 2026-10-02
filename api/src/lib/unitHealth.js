@@ -1,3 +1,4 @@
+import { invoicePaidCents } from './invoices.js';
 import { WCP_LEASE_DEFAULTS, monthlyChargeCents } from './leaseTerms.js';
 
 export const LATE_FEE_CENTS = 5000;
@@ -84,9 +85,7 @@ export function computeRentRollMonth({ leases, invoices, period }) {
       invoice.periodEnd === period.periodEnd &&
       active.some((lease) => lease.id === invoice.leaseId),
   );
-  const collectedCents = periodInvoices
-    .filter((invoice) => invoice.status === 'paid')
-    .reduce((sum, invoice) => sum + Number(invoice.amountCents), 0);
+  const collectedCents = periodInvoices.reduce((sum, invoice) => sum + invoicePaidCents(invoice), 0);
   const paidCount = periodInvoices.filter((invoice) => invoice.status === 'paid').length;
   const progressPercent =
     expectedCents > 0 ? Math.min(100, Math.round((collectedCents / expectedCents) * 100)) : 0;

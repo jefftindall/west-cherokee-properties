@@ -42,4 +42,4 @@ West Cherokee Properties is a **rental property management** business with homes
 
 - `/office` is staff-only (workforce Entra). `/portal` is renters (Entra External ID). Authn ≠ authz.
 - Fair housing: one application form for everyone. Do not collect SSN or protected-class fields.
-- Stripe is the money system of record. Do not invent a second ledger.
+- Stripe is the payment processor. Keep a single source of truth for charges, payments, and balances: the Azure SQL database. Do not duplicate that record in Stripe (no Stripe Invoicing) or anywhere else.

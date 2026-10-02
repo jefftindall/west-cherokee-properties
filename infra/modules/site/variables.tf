@@ -70,6 +70,22 @@ variable "rent_payments_enabled" {
   default = false
 }
 
+variable "rent_communications_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "rent_communications_preview" {
+  type    = bool
+  default = false
+}
+
+variable "rent_jobs_schedule_enabled" {
+  type        = bool
+  default     = false
+  description = "Run the daily rent timer on schedule. When false the timer is disabled but can still be run on demand (docs/runbooks/rent-jobs.md)."
+}
+
 variable "shared_key_vault_name" {
   type    = string
   default = "kv-wcp-shared"

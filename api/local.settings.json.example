@@ -13,6 +13,8 @@
     "ALLOWED_USER_IDS": "dev-user",
     "STRIPE_SECRET_KEY": "sk_test_not_configured",
     "STRIPE_WEBHOOK_SECRET": "whsec_test_secret",
-    "RENT_PAYMENTS_ENABLED": "false"
+    "RENT_PAYMENTS_ENABLED": "false",
+    "RENT_COMMUNICATIONS_ENABLED": "false",
+    "RENT_COMMUNICATIONS_PREVIEW": "false"
   }
 }

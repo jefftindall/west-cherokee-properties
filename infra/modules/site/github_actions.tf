@@ -44,6 +44,14 @@ resource "github_actions_environment_variable" "azure_static_web_app_name" {
   value         = azurerm_static_web_app.main.name
 }
 
+resource "github_actions_environment_variable" "rent_jobs_function_app_name" {
+  count         = var.manage_github_actions ? 1 : 0
+  environment   = github_repository_environment.this[0].environment
+  repository    = var.github_repo
+  variable_name = "AZURE_RENT_JOBS_FUNCTION_APP_NAME"
+  value         = azurerm_function_app_flex_consumption.rent_jobs.name
+}
+
 resource "github_actions_environment_variable" "appinsights_connection_string" {
   count         = var.manage_github_actions ? 1 : 0
   environment   = github_repository_environment.this[0].environment

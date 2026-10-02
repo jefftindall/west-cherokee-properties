@@ -1,6 +1,6 @@
 # Runbook: Deploy and rollback
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-27
 
 Changes ship through a pull request. Agents must not apply Terraform or deploy from a laptop unless a human explicitly asks.
 
@@ -12,9 +12,11 @@ Repo: `jefftindall/west-cherokee-properties`. Staging host: `test.westcherokee.c
 
 1. Merge to `main` (Protect main + required checks).
 2. If `infra/` changed: `CD: terraform` applies staging then prod.
-3. `CD: main` builds the release artifact (`dist` + `api`).
-4. Staging: apply noindex patch, SWA deploy, smoke, journeys.
-5. Production: SWA deploy, smoke (canary; does not auto-rollback).
+3. `CD: main` builds the release artifact (`dist` + `api`) and the rent jobs package (`rent-jobs`).
+4. Staging: apply noindex patch, SWA deploy, rent jobs Function App deploy, smoke, journeys.
+5. Production: SWA deploy, rent jobs Function App deploy, smoke (canary; does not auto-rollback).
+
+The rent jobs deploy steps skip until Terraform has written `AZURE_RENT_JOBS_FUNCTION_APP_NAME` to the environment. See [rent-jobs.md](./rent-jobs.md).
 
 ```bash
 gh workflow list --repo jefftindall/west-cherokee-properties

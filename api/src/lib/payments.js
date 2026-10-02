@@ -1,7 +1,6 @@
 import { monthlyChargeCents } from './leaseTerms.js';
-import { markInvoicePaid } from './invoices.js';
+import { applyPaymentToInvoice, invoiceRemainingCents } from './invoices.js';
 import { monthPeriodForOffset } from './unitHealth.js';
-import { rentPaymentsEnabled, stripeWebhookClient } from './stripeWebhook.js';
 
 export const MANUAL_PAYMENT_METHODS = ['cash', 'check', 'zelle', 'ach', 'other'];
 
@@ -30,15 +29,7 @@ export async function ensureInvoiceForLeasePeriod(store, lease, periodStart, per
   });
 }
 
-async function markStripeInvoicePaidOutOfBand(invoice) {
-  const stripeInvoiceId = String(invoice.stripeInvoiceId || '').trim();
-  if (!stripeInvoiceId) return;
-  if (!rentPaymentsEnabled() || !process.env.STRIPE_SECRET_KEY?.startsWith('sk_')) return;
-  if (process.env.STRIPE_SECRET_KEY.includes('not_configured')) return;
-  const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
-  await stripe.invoices.pay(stripeInvoiceId, { paid_out_of_band: true });
-}
-
+/** Staff-recorded payment (cash, check, Zelle, ...). Partial amounts are allowed, up to the remaining balance. */
 export async function recordManualPayment(store, {
   invoice,
   amountCents,
@@ -62,21 +53,20 @@ export async function recordManualPayment(store, {
     err.name = 'ValidationError';
     throw err;
   }
-  const paymentAmount = Number(amountCents ?? invoice.amountCents);
+  const remaining = invoiceRemainingCents(invoice);
+  const paymentAmount = Number(amountCents ?? remaining);
   if (!Number.isInteger(paymentAmount) || paymentAmount < 1) {
     const err = new Error('amountCents must be a positive integer');
     err.name = 'ValidationError';
     throw err;
   }
-  if (paymentAmount !== Number(invoice.amountCents)) {
-    const err = new Error('Partial payments are not supported yet. Amount must match the invoice total.');
+  if (paymentAmount > remaining) {
+    const err = new Error(`Amount is more than the remaining $${(remaining / 100).toFixed(2)} on this invoice.`);
     err.name = 'ValidationError';
     throw err;
   }
 
-  await markStripeInvoicePaidOutOfBand(invoice);
-
-  const { invoice: updated, payment } = await markInvoicePaid(store, invoice, {
+  const { invoice: updated, payment } = await applyPaymentToInvoice(store, invoice, {
     amountCents: paymentAmount,
     source: 'manual',
     method,
@@ -96,7 +86,6 @@ export async function recordLeasePeriodPayment(store, {
   recordedBy,
   paidAt,
   amountCents,
-  createStripeInvoice = false,
 }) {
   if (!lease || lease.status !== 'active') {
     const err = new Error('An active lease is required.');
@@ -109,32 +98,7 @@ export async function recordLeasePeriodPayment(store, {
     throw err;
   }
 
-  let invoice = await ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd);
-
-  if (
-    createStripeInvoice &&
-    !invoice.stripeInvoiceId &&
-    rentPaymentsEnabled() &&
-    process.env.STRIPE_SECRET_KEY?.startsWith('sk_') &&
-    !process.env.STRIPE_SECRET_KEY.includes('not_configured')
-  ) {
-    const { createStripeInvoiceForRow } = await import('./stripeWebhook.js');
-    const stripe = stripeWebhookClient(process.env.STRIPE_SECRET_KEY);
-    const person = await store.getPerson(lease.personId);
-    let customerId = String(person.stripeCustomerId || '').trim();
-    if (!customerId) {
-      const customer = await stripe.customers.create({ email: person.email, name: person.displayName });
-      customerId = customer.id;
-      await store.updatePersonStripeCustomerId(person.id, customerId);
-    }
-    const stripeInv = await createStripeInvoiceForRow({
-      stripe,
-      customerId,
-      appInvoice: invoice,
-      siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
-    });
-    invoice = await store.updateInvoice(invoice.id, stripeInv);
-  }
+  const invoice = await ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd);
 
   return recordManualPayment(store, {
     invoice,

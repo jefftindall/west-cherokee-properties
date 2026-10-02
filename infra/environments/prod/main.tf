@@ -72,6 +72,7 @@ module "site" {
   github_repo_id             = var.github_repo_id
   manage_github_actions      = var.manage_github_actions
   rent_payments_enabled      = false
+  rent_jobs_schedule_enabled = true
   purge_protection_enabled   = true
   soft_delete_retention_days = 90
 }

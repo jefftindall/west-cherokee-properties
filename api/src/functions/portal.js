@@ -4,9 +4,16 @@ import { newCorrelationId } from '../lib/auth.js';
 import { failureResponse, htmlOk, jsonOk } from '../lib/httpErrors.js';
 import { buildLeaseDocument } from '../lib/leaseDocument.js';
 import { portalCaller } from '../lib/officeAccess.js';
-import { invoiceOwnedByPerson } from '../lib/invoices.js';
+import { invoiceOwnedByPerson, invoiceRemainingCents } from '../lib/invoices.js';
+import {
+  computeLeaseBalance,
+  createRentCheckout,
+  lateFeeNotice,
+  MIN_PARTIAL_PAYMENT_CENTS,
+} from '../lib/rentPayments.js';
 import { requestOwnedByPerson } from '../lib/serviceRequests.js';
 import { getStore } from '../lib/store.js';
+import { stripeReady, stripeWebhookClient } from '../lib/stripeWebhook.js';
 
 function wrap(handler) {
   return async (request) => {
@@ -82,10 +89,66 @@ app.http('portalInvoices', {
     if (!person) return jsonOk({ invoices: [] });
     const store = getStore();
     const leases = await store.getLeasesForPerson(person.id);
-    const invoices = (await store.listInvoices()).filter((invoice) =>
-      invoiceOwnedByPerson(invoice, leases, person.id),
-    );
+    const invoices = (await store.listInvoices())
+      .filter((invoice) => invoiceOwnedByPerson(invoice, leases, person.id))
+      .map((invoice) => ({ ...invoice, remainingCents: invoiceRemainingCents(invoice) }));
     return jsonOk({ invoices });
+  }),
+});
+
+async function activeLeaseForPortal(request) {
+  const { person } = await personForPortal(request);
+  if (!person) return { person: null, lease: null };
+  const leases = await getStore().getLeasesForPerson(person.id);
+  return { person, lease: leases.find((row) => row.status === 'active') || null };
+}
+
+app.http('portalBalance', {
+  methods: ['GET'],
+  authLevel: 'anonymous',
+  route: 'portal/balance',
+  handler: wrap(async (request) => {
+    const { lease } = await activeLeaseForPortal(request);
+    const paymentsEnabled = stripeReady();
+    if (!lease) return jsonOk({ lease: null, paymentsEnabled });
+    const store = getStore();
+    const [invoices, checkouts] = await Promise.all([store.listInvoices(), store.listPaymentCheckouts(lease.id)]);
+    const balance = computeLeaseBalance(lease, invoices, checkouts);
+    return jsonOk({
+      paymentsEnabled,
+      minimumPaymentCents: MIN_PARTIAL_PAYMENT_CENTS,
+      ...balance,
+      lateFee: lateFeeNotice(lease, invoices, checkouts),
+    });
+  }),
+});
+
+app.http('portalPaymentCheckout', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'portal/payments/checkout',
+  handler: wrap(async (request) => {
+    if (!stripeReady()) {
+      const err = new Error('Online payments are not available yet. Contact the office to pay.');
+      err.name = 'ConflictError';
+      throw err;
+    }
+    const { person, lease } = await activeLeaseForPortal(request);
+    if (!person || !lease) {
+      const err = new Error('No active lease is on file for this sign-in.');
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    const body = z.object({ amountCents: z.number().int().positive() }).parse(await request.json());
+    const checkout = await createRentCheckout({
+      stripe: stripeWebhookClient(process.env.STRIPE_SECRET_KEY),
+      store: getStore(),
+      person,
+      lease,
+      amountCents: body.amountCents,
+      siteUrl: process.env.SITE_URL || 'https://westcherokee.com',
+    });
+    return jsonOk({ url: checkout.url }, 201);
   }),
 });
 

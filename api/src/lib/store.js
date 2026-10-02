@@ -25,7 +25,10 @@ export function createMemoryStore() {
     leases: [],
     invoices: [],
     payments: [],
+    paymentCheckouts: [],
     serviceRequests: [],
+    tenantCommunicationState: [],
+    communicationLog: [],
   };
 
   return {
@@ -175,6 +178,37 @@ export function createMemoryStore() {
     listPayments: async (invoiceId) =>
       clone(invoiceId ? db.payments.filter((p) => p.invoiceId === invoiceId) : db.payments),
 
+    async createPaymentCheckout(input) {
+      if (db.paymentCheckouts.some((row) => row.id === input.id)) {
+        throw new ConflictError('Checkout already recorded.');
+      }
+      const now = new Date().toISOString();
+      const row = {
+        id: input.id,
+        leaseId: input.leaseId,
+        personId: input.personId,
+        amountCents: Number(input.amountCents),
+        status: input.status || 'open',
+        stripePaymentIntentId: '',
+        unappliedCents: 0,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.paymentCheckouts.push(row);
+      return clone(row);
+    },
+    getPaymentCheckout: async (id) => clone(db.paymentCheckouts.find((row) => row.id === id) || null),
+    listPaymentCheckouts: async (leaseId) => clone(db.paymentCheckouts.filter((row) => row.leaseId === leaseId)),
+    async transitionPaymentCheckout(id, fromStatuses, patch) {
+      const row = db.paymentCheckouts.find((entry) => entry.id === id);
+      if (!row || !fromStatuses.includes(row.status)) return null;
+      row.status = patch.status;
+      if (patch.stripePaymentIntentId != null) row.stripePaymentIntentId = patch.stripePaymentIntentId;
+      if (patch.unappliedCents != null) row.unappliedCents = patch.unappliedCents;
+      row.updatedAt = new Date().toISOString();
+      return clone(row);
+    },
+
     async createServiceRequest(input) {
       const row = normalizeServiceRequest({
         ...input,
@@ -191,6 +225,54 @@ export function createMemoryStore() {
       if (!row) throw new NotFoundError('Service request not found.');
       Object.assign(row, patch);
       return clone(row);
+    },
+
+    async getTenantCommunicationState(leaseId) {
+      return clone(db.tenantCommunicationState.find((row) => row.leaseId === leaseId) || null);
+    },
+    async upsertTenantCommunicationState(leaseId, patch) {
+      let row = db.tenantCommunicationState.find((entry) => entry.leaseId === leaseId);
+      if (!row) {
+        row = {
+          leaseId,
+          lastSentDate: '',
+          lastMessageType: '',
+          lastInvoiceNoticePeriod: '',
+          updatedAt: new Date().toISOString(),
+        };
+        db.tenantCommunicationState.push(row);
+      }
+      Object.assign(row, patch, { leaseId, updatedAt: new Date().toISOString() });
+      return clone(row);
+    },
+    async getCommunicationLogForLeaseDate(leaseId, sentDate) {
+      return clone(
+        db.communicationLog.find((row) => row.leaseId === leaseId && row.sentDate === sentDate) || null,
+      );
+    },
+    async createCommunicationLog(input) {
+      const row = {
+        id: input.id || `comm-${randomUUID()}`,
+        leaseId: input.leaseId,
+        messageType: input.messageType,
+        sentDate: input.sentDate,
+        recipientEmail: input.recipientEmail,
+        preview: Boolean(input.preview),
+        periodStart: input.periodStart || '',
+        createdAt: input.createdAt || new Date().toISOString(),
+      };
+      const dup = db.communicationLog.find(
+        (entry) => entry.leaseId === row.leaseId && entry.sentDate === row.sentDate,
+      );
+      if (dup) throw new ConflictError('A communication was already logged for that lease and date.');
+      db.communicationLog.push(row);
+      return clone(row);
+    },
+    async listCommunicationLog(leaseId) {
+      const rows = leaseId
+        ? db.communicationLog.filter((row) => row.leaseId === leaseId)
+        : db.communicationLog;
+      return clone(rows);
     },
 
     listOfficeUsers: async () => clone(db.officeUsers),

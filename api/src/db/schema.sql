@@ -169,3 +169,55 @@ BEGIN
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
   );
 END;
+
+IF OBJECT_ID('dbo.tenant_communication_state', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.tenant_communication_state (
+    lease_id NVARCHAR(64) NOT NULL PRIMARY KEY REFERENCES dbo.leases(id),
+    last_sent_date DATE NULL,
+    last_message_type NVARCHAR(32) NULL,
+    last_invoice_notice_period DATE NULL,
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+END;
+
+IF OBJECT_ID('dbo.communication_log', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.communication_log (
+    id NVARCHAR(64) NOT NULL PRIMARY KEY,
+    lease_id NVARCHAR(64) NOT NULL REFERENCES dbo.leases(id),
+    message_type NVARCHAR(32) NOT NULL,
+    sent_date DATE NOT NULL,
+    recipient_email NVARCHAR(320) NOT NULL,
+    preview BIT NOT NULL CONSTRAINT df_comm_log_preview DEFAULT 0,
+    period_start DATE NULL,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT ux_comm_log_lease_sent_date UNIQUE (lease_id, sent_date)
+  );
+END;
+
+-- Partial payments: amount applied so far. An invoice is 'paid' only when paid_cents >= amount_cents.
+IF COL_LENGTH('dbo.invoices', 'paid_cents') IS NULL
+BEGIN
+  ALTER TABLE dbo.invoices ADD paid_cents INT NOT NULL CONSTRAINT df_invoices_paid_cents DEFAULT 0;
+  -- Dynamic SQL: the whole file runs as one batch, so the new column is not visible to static statements here.
+  EXEC('UPDATE dbo.invoices SET paid_cents = amount_cents WHERE status = ''paid''');
+END;
+
+-- One row per Stripe Checkout Session started from the renter portal. Stripe only processes the payment;
+-- allocation to invoices happens in SQL when the session settles.
+IF OBJECT_ID('dbo.payment_checkouts', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.payment_checkouts (
+    id NVARCHAR(255) NOT NULL PRIMARY KEY,
+    lease_id NVARCHAR(64) NOT NULL REFERENCES dbo.leases(id),
+    person_id NVARCHAR(64) NOT NULL REFERENCES dbo.people(id),
+    amount_cents INT NOT NULL,
+    status NVARCHAR(32) NOT NULL,
+    stripe_payment_intent_id NVARCHAR(64) NULL,
+    unapplied_cents INT NOT NULL CONSTRAINT df_payment_checkouts_unapplied DEFAULT 0,
+    created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+  CREATE INDEX ix_payment_checkouts_lease ON dbo.payment_checkouts(lease_id, status);
+END;

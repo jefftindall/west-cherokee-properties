@@ -11,7 +11,7 @@ locals {
     local.budget_alert_email_raw != "REPLACE_ME"
   )
   budget_start_date       = "2026-08-01T00:00:00Z"
-  subscription_budget_usd = 50
+  subscription_budget_usd = 70
 }
 
 resource "azurerm_consumption_budget_subscription" "monthly" {

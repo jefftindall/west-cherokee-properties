@@ -96,7 +96,7 @@ Prior downtown leases checked: Landlord has no knowledge of lead-based paint or 
 
 ### `{{additional_provisions}}`
 
-Write `None.` when there is nothing extra. Use this block for a multi-year rent schedule. Do not put a second rent ledger here — Stripe remains the money system of record. Pet rent is already in the Pets and Rent sections.
+Write `None.` when there is nothing extra. Use this block for a multi-year rent schedule. Do not put a second rent ledger here — the office database is the single source of truth for charges and payments. Pet rent is already in the Pets and Rent sections.
 
 ## Unit defaults
 

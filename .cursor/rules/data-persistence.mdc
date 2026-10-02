@@ -10,4 +10,4 @@ alwaysApply: false
 
 When a PR adds, removes, or changes a durable store, schema, relation, or how records are read/written (Azure SQL, git collections, Stripe catalog, Key Vault names the app reads), update that document **in the same PR** — bump **Last updated** and fix any stale mermaid.
 
-Do not invent a second application database. Azure SQL is the operational store; git is public brand only; Stripe is money. A new billable SKU must update `docs/runbooks/cost-and-quotas.md` and the subscription budget in the same PR.
+Do not invent a second application database. Azure SQL is the operational store and the single source of truth for charges, payments, and balances; git is public brand only; Stripe only processes payments. A new billable SKU must update `docs/runbooks/cost-and-quotas.md` and the subscription budget in the same PR.
