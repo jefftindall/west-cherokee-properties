@@ -6,7 +6,7 @@ Astro property-management site + Azure Functions API. Node >= 22.12 is required 
 
 ### No local deploys
 
-**Do not apply Terraform, deploy SWA, or mutate Azure env resources unless the user explicitly asks in that conversation.** Open a PR. After merge, `CD: main` deploys the site and `CD: terraform` applies staging/prod. See [`.cursor/rules/no-local-deploy.mdc`](.cursor/rules/no-local-deploy.mdc).
+**Do not apply Terraform, deploy SWA, or mutate Azure env resources unless the user explicitly asks in that conversation.** Open a PR. After merge, `CD: main` deploys the site and applies staging/prod Terraform when `infra/` changed. See [`.cursor/rules/no-local-deploy.mdc`](.cursor/rules/no-local-deploy.mdc).
 
 ### Lint and static analysis (required before commit)
 

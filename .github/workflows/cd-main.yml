@@ -1,5 +1,9 @@
 name: "CD: main"
 
+# Deploy on merge to main (or manual dispatch). PRs run CI: static analysis only.
+# Terraform apply runs only when infra/** changed; otherwise skipped.
+# Staging TF → deploy/verify staging → prod TF → deploy/smoke prod.
+# Build once per release; staging and prod deploy the same artifact.
 on:
   push:
     branches:
@@ -15,8 +19,122 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.outputs.outputs.infra }}
+      release: ${{ steps.outputs.outputs.release }}
+      prod: ${{ steps.outputs.outputs.prod }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+            app:
+              - 'src/**'
+              - 'public/**'
+              - 'api/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'astro.config.mjs'
+              - 'staticwebapp.config.json'
+              - 'tsconfig.json'
+              - 'tests/**'
+              - 'playwright.smoke.config.ts'
+              - 'playwright.journey.config.ts'
+              - '.github/workflows/cd-main.yml'
+      - id: outputs
+        run: |
+          ON_MAIN=false
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            ON_MAIN=true
+          fi
+
+          INFRA="${{ steps.filter.outputs.infra }}"
+          APP="${{ steps.filter.outputs.app }}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "infra=true" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            if [ "$ON_MAIN" = "true" ]; then
+              echo "prod=true" >> "$GITHUB_OUTPUT"
+              echo "Manual dispatch on main — running full CD including Terraform."
+            else
+              echo "prod=false" >> "$GITHUB_OUTPUT"
+              echo "Manual dispatch not on main — production stages skipped."
+            fi
+            exit 0
+          fi
+
+          echo "infra=$INFRA" >> "$GITHUB_OUTPUT"
+
+          if [ "$INFRA" = "true" ] || [ "$APP" = "true" ]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "prod=true" >> "$GITHUB_OUTPUT"
+            echo "App or infra changes — CD will deploy. Terraform: $INFRA"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "prod=false" >> "$GITHUB_OUTPUT"
+            echo "No app or infra changes — skipping CD jobs."
+          fi
+
+  terraform_staging:
+    name: Terraform Apply Staging
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && vars.AZURE_TF_CLIENT_ID != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_TF_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TF_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+
+      # workflow GITHUB_TOKEN cannot read Actions env vars/secrets (403). Mint a
+      # short-lived installation token from kv-wcp-shared instead of a PAT.
+      - name: Mint GitHub App token
+        id: gh_app
+        env:
+          GH_APP_ID: ${{ vars.GH_APP_ID }}
+          GH_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+        run: bash scripts/mint-github-app-token.sh --from-keyvault kv-wcp-shared --github-output
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform apply
+        working-directory: infra/environments/staging
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TF_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+          GITHUB_TOKEN: ${{ steps.gh_app.outputs.token }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tfplan
+          terraform apply -input=false tfplan
+
   build_release:
     name: Build release
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     # staging env subject matches wcp-gha-terraform OIDC (repo AZURE_TF_* vars).
     environment: staging
@@ -81,8 +199,14 @@ jobs:
 
   deploy_staging:
     name: Deploy Staging
-    needs: build_release
-    if: vars.STAGING_HOSTNAME != ''
+    needs: [changes, terraform_staging, build_release]
+    if: |
+      always() &&
+      needs.changes.result == 'success' &&
+      needs.changes.outputs.release == 'true' &&
+      needs.build_release.result == 'success' &&
+      (needs.terraform_staging.result == 'success' || needs.terraform_staging.result == 'skipped') &&
+      vars.STAGING_HOSTNAME != ''
     runs-on: ubuntu-latest
     environment: staging
     outputs:
@@ -115,7 +239,7 @@ jobs:
           api_location: api
           skip_app_build: true
 
-      # Skipped until CD: terraform has created the Function App and its environment variable.
+      # Skipped until Terraform has created the Function App and its environment variable.
       - name: Download rent jobs artifact
         if: vars.AZURE_RENT_JOBS_FUNCTION_APP_NAME != ''
         uses: actions/download-artifact@v8
@@ -137,8 +261,15 @@ jobs:
 
   smoke_staging:
     name: Smoke Staging
-    needs: deploy_staging
-    if: needs.deploy_staging.outputs.hostname != ''
+    needs: [changes, deploy_staging]
+    # always(): deploy_staging can succeed while terraform_staging is skipped; without
+    # always(), GitHub skips this job (and prod) for the whole dependency chain.
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.changes.result == 'success' &&
+      needs.deploy_staging.result == 'success' &&
+      needs.deploy_staging.outputs.hostname != ''
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -164,10 +295,72 @@ jobs:
           BASE_URL: https://${{ needs.deploy_staging.outputs.hostname }}
         run: npm run test:journey
 
+  terraform_prod:
+    name: Terraform Apply Production
+    needs: [changes, deploy_staging, smoke_staging]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.changes.outputs.prod == 'true' &&
+      needs.changes.outputs.release == 'true' &&
+      needs.changes.outputs.infra == 'true' &&
+      vars.AZURE_TF_CLIENT_ID != '' &&
+      needs.deploy_staging.result == 'success' &&
+      needs.smoke_staging.result == 'success'
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_TF_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TF_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+
+      - name: Mint GitHub App token
+        id: gh_app
+        env:
+          GH_APP_ID: ${{ vars.GH_APP_ID }}
+          GH_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+        run: bash scripts/mint-github-app-token.sh --from-keyvault kv-wcp-shared --github-output
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform apply
+        working-directory: infra/environments/prod
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ vars.AZURE_TF_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ vars.AZURE_TF_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+          GITHUB_TOKEN: ${{ steps.gh_app.outputs.token }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color -out=tfplan
+          terraform apply -input=false tfplan
+
   deploy_prod:
     name: Deploy Production
-    needs: [build_release, smoke_staging]
-    if: vars.PROD_HOSTNAME != ''
+    needs: [changes, build_release, terraform_prod, deploy_staging, smoke_staging]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.changes.outputs.prod == 'true' &&
+      needs.deploy_staging.result == 'success' &&
+      needs.smoke_staging.result == 'success' &&
+      needs.build_release.result == 'success' &&
+      (needs.terraform_prod.result == 'success' || needs.terraform_prod.result == 'skipped') &&
+      vars.PROD_HOSTNAME != ''
     runs-on: ubuntu-latest
     environment: prod
     steps:
@@ -212,8 +405,12 @@ jobs:
 
   smoke_prod:
     name: Smoke Production
-    needs: deploy_prod
-    if: vars.PROD_HOSTNAME != ''
+    needs: [changes, deploy_prod]
+    if: |
+      always() &&
+      !cancelled() &&
+      needs.deploy_prod.result == 'success' &&
+      vars.PROD_HOSTNAME != ''
     runs-on: ubuntu-latest
     environment: prod
     steps:
