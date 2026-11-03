@@ -1,8 +1,12 @@
 # Runbook: Rent jobs Function App
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-11-03
 
 Daily rent automation (late fees, then next-month charges, then tenant emails) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
+
+The invoice step creates charges on the lead day (10 days before the 1st, Eastern) **and** for up to **3 prior calendar days** if that run was missed, so a short outage still posts the month while tenants have notice. Late fees still apply to those scheduler invoices. If the outage is longer, use staff [invoice catch-up](./rent-invoice-catch-up.md) (no automatic late fee; apologetic email).
+
+Prod raises an Azure Monitor alert when `rentDailyJobs` has no successful log for **48 hours** (email to shared-KV `ALERT-EMAIL`). Staging’s timer is off, so that alert is not created there.
 
 | Environment | Schedule | How it runs |
 |-------------|----------|-------------|

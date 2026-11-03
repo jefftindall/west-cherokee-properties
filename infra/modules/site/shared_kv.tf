@@ -8,6 +8,11 @@ data "azurerm_key_vault_secret" "site_contact_email" {
   key_vault_id = data.azurerm_key_vault.shared.id
 }
 
+data "azurerm_key_vault_secret" "alert_email" {
+  name         = "ALERT-EMAIL"
+  key_vault_id = data.azurerm_key_vault.shared.id
+}
+
 data "azurerm_key_vault_secret" "turnstile_secret" {
   name         = "TURNSTILE-SECRET-KEY"
   key_vault_id = data.azurerm_key_vault.shared.id

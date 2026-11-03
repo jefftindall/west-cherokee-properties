@@ -78,6 +78,10 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-20 | planned | 6 | Runbook `docs/runbooks/workflow-monitoring.md`; rotate-secrets entry for `ALERT-PHONE` |
 | OP-21 | done | 1 | Manual payment entry (`POST /api/office/payments`); dashboard rent roll (current + next month) with progress |
 | OP-22 | done | 1 | Unit manage detail — balance due, lease progress, recent payments, open/closed service requests on `/office/unit?unitId=` |
+| OP-25 | done | 2 | Invoice scheduler 3-day Eastern lookback; `invoice_notice` eligible in the same window; `billing_source=scheduler` |
+| OP-26 | done | 2 | Staff catch-up (`POST /api/office/invoices/catch-up` + `/office/invoices` UI); `billing_source=catchup`; no auto late fee; apologetic `invoice_catchup_notice` |
+| OP-27 | done | 2 | Prod Azure Monitor alert when `rentDailyJobs` has no App Insights trace for 48h (email `ALERT-EMAIL`) |
+| OP-28 | done | 2 | Runbook [`rent-invoice-catch-up.md`](../runbooks/rent-invoice-catch-up.md) |
 
 Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 → OP-15–16 → OP-17–20 (+ Playwright for dashboard, digest preview, deep-link login).
 
@@ -85,11 +89,12 @@ Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 �
 
 | When | Action |
 |------|--------|
-| 10 days before due | Create the month's charge in SQL (rent + pets); `invoice_notice` email with the total balance and portal link |
+| 10 days before due (±3 Eastern days if the daily job was missed) | Create the month's charge in SQL (rent + pets, `billing_source=scheduler`); `invoice_notice` email with the total balance and portal link. Late fees still apply after grace. |
 | Due (1st) | Comm scheduler: `due_reminder` if unpaid |
 | 2nd–4th | Comm scheduler: `grace_warning` (max one email/day) |
-| After grace, not paid in full | Late-fee job adds $50 (partial payments do not prevent it); comm scheduler: `balance_overdue` |
+| After grace, not paid in full | Late-fee job adds $50 unless `billing_source=catchup` or paid in full (partial payments do not prevent it); comm scheduler: `balance_overdue` |
 | Weekly after late fee | `balance_overdue` if ≥7 days since last and gate allows |
+| Staff catch-up (outage longer than lookback / missing months) | `POST /api/office/invoices/catch-up` creates missing months as `catchup` (no auto late fee) and sends one apologetic `invoice_catchup_notice` per lease |
 
 **One email per lease per calendar day:** state-driven selection (priority: balance_overdue → grace_warning → due_reminder → invoice_notice). No queue replay after outage. Transactional gate before ACS send; unique constraint on `(lease_id, sent_date)`.
 
@@ -107,12 +112,14 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 - [x] Dashboard shows expected vs collected rent for current and next month with progress bars
 - [x] Staff can record manual/back payments for active leases via `/office/payments`
-- [x] Active leases get a SQL charge 10 days before the 1st; balance includes prior open charges
+- [x] Active leases get a SQL charge 10 days before the 1st (with 3-day lookback); balance includes prior open charges
 - [x] Tenants can pay in full or in part (minimum $100) from the portal; amount is fixed before Stripe Checkout
 - [x] Portal and emails state that only payment in full within the grace period avoids the late fee
 - [x] Tenant comms follow schedule; gated by `RENT_COMMUNICATIONS_*`; preview before live
-- [x] At most one tenant email per lease per day; no catch-up backlog after outage
-- [x] Late fee auto-applies after grace; red only after fee applied
+- [x] At most one tenant email per lease per day; no automatic email backlog after outage (staff catch-up sends a single apologetic notice)
+- [x] Late fee auto-applies after grace on scheduler invoices; catch-up invoices are late-fee exempt; red only after fee applied (or prior-month arrears)
+- [x] Staff can dry-run and run invoice catch-up from `/office/invoices`
+- [x] Prod alerts when `rentDailyJobs` is silent for 48 hours
 - [ ] 90-day renewal workflow; rent schedule drives invoice amounts
 - [ ] Service request close requires cost; maintenance totals by property
 - [ ] Weekly digest to property managers when `OFFICE_DIGEST_ENABLED=true`
@@ -130,6 +137,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-11-03: Invoice resilience — 3-day scheduler lookback (late fees still apply); staff catch-up API/UI with apologetic email and no auto late fee; prod 48h missed-run alert; runbook `rent-invoice-catch-up.md` (OP-25–28).
 - 2026-11-03: Unit health — yellow (grace) only when the *current* month is the sole unpaid period; prior-month arrears (open or missing invoices) are always red, including on the 2nd–4th.
 - 2026-09-27: Dropped Stripe Invoicing. Azure SQL is the single source of truth for charges, payments, and balances; Stripe only processes payments. Added portal partial payments (OP-24) with a $100 minimum, fixed-amount Checkout, and clear late-fee policy. Daily job order is now late fees → charges → communications.
 - 2026-09-27: Timer hosting — replaced three `app.timer` schedulers in the SWA API (which never fire on managed Functions) with one `rentDailyJobs` timer on a standalone Flex Consumption Function App (OP-23). Prod runs daily at 13:00 UTC; staging disabled and run on demand. Budget raised to $70 for the SQL wake window.

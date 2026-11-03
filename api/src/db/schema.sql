@@ -204,6 +204,12 @@ BEGIN
   EXEC('UPDATE dbo.invoices SET paid_cents = amount_cents WHERE status = ''paid''');
 END;
 
+-- How the charge was created: scheduler (incl. 3-day lookback) vs staff catch-up (late-fee exempt).
+IF COL_LENGTH('dbo.invoices', 'billing_source') IS NULL
+BEGIN
+  ALTER TABLE dbo.invoices ADD billing_source NVARCHAR(32) NOT NULL CONSTRAINT df_invoices_billing_source DEFAULT 'scheduler';
+END;
+
 -- One row per Stripe Checkout Session started from the renter portal. Stripe only processes the payment;
 -- allocation to invoices happens in SQL when the session settles.
 IF OBJECT_ID('dbo.payment_checkouts', 'U') IS NULL

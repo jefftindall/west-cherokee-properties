@@ -54,7 +54,7 @@ function monthPeriod(year, month) {
   };
 }
 
-function billingMonthsThroughLease(lease, now = new Date()) {
+export function billingMonthsThroughLease(lease, now = new Date()) {
   const todayIso = nyTodayIso(now);
   const endBound = todayIso < lease.endDate ? todayIso : lease.endDate;
   const [startYear, startMonth] = lease.startDate.split('-').map(Number);

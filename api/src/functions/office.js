@@ -12,6 +12,7 @@ import { OCCUPANT_RELATIONSHIPS, resolveLeaseHousehold } from '../lib/household.
 import { getStore } from '../lib/store.js';
 import { buildUnitDetail } from '../lib/unitDetail.js';
 import { buildDashboard, buildRentRoll } from '../lib/unitHealth.js';
+import { runInvoiceCatchUp } from '../lib/invoiceCatchUp.js';
 import { previewCommunications } from '../lib/rentCommunications.js';
 import {
   defaultPeriodForMonthInput,
@@ -535,8 +536,30 @@ app.http('officeInvoicesPost', {
       periodStart: body.periodStart,
       periodEnd: body.periodEnd,
       amountCents: monthlyChargeCents(lease.rentCents, lease.terms?.petCount),
+      billingSource: 'office',
     });
     return jsonOk({ invoice }, 201);
+  }),
+});
+
+app.http('officeInvoicesCatchUpPost', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'office/invoices/catch-up',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.INVOICES_WRITE);
+    const body = z
+      .object({
+        leaseId: z.string().min(1).optional(),
+        dryRun: z.boolean().optional(),
+      })
+      .parse(await request.json().catch(() => ({})));
+    const result = await runInvoiceCatchUp(getStore(), {
+      leaseId: body.leaseId || null,
+      dryRun: Boolean(body.dryRun),
+      env: process.env,
+    });
+    return jsonOk(result, body.dryRun ? 200 : 201);
   }),
 });
 

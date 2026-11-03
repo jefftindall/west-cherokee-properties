@@ -2,7 +2,7 @@ import { sendTenantEmail } from './acsNotify.js';
 import { invoiceRemainingCents } from './invoices.js';
 import { formatMoney } from './leaseTerms.js';
 import {
-  billingPeriodForSchedulingDay,
+  billingPeriodsForLookback,
   currentMonthPeriodFromNow,
   nyTodayIso,
 } from './rentBilling.js';
@@ -28,6 +28,7 @@ export const MESSAGE_TYPES = [
   'grace_warning',
   'due_reminder',
   'invoice_notice',
+  'invoice_catchup_notice',
 ];
 
 const MESSAGE_PRIORITY = {
@@ -35,6 +36,7 @@ const MESSAGE_PRIORITY = {
   grace_warning: 2,
   due_reminder: 3,
   invoice_notice: 4,
+  invoice_catchup_notice: 5,
 };
 
 const OVERDUE_REPEAT_DAYS = 7;
@@ -58,7 +60,14 @@ function ordinal(day) {
   return `${day}${{ 1: 'st', 2: 'nd', 3: 'rd' }[day % 10] || 'th'}`;
 }
 
-export function buildCommunicationMessage({ messageType, person, period, amountCents, payUrl = portalPayUrl() }) {
+export function buildCommunicationMessage({
+  messageType,
+  person,
+  period,
+  amountCents,
+  payUrl = portalPayUrl(),
+  catchupMonths = [],
+}) {
   const tenant = person?.displayName || 'Tenant';
   const month = period ? monthLabel(period.periodStart) : 'this month';
   const amount = formatMoney(amountCents);
@@ -69,12 +78,20 @@ export function buildCommunicationMessage({ messageType, person, period, amountC
     `You can make partial payments (minimum ${formatMoney(MIN_PARTIAL_PAYMENT_CENTS)}) to lower your balance, ` +
     'but only payment in full within the grace period avoids the late fee.';
   const sign = '— West Cherokee Properties';
+  const monthsList =
+    (catchupMonths || []).length > 0
+      ? catchupMonths.map((iso) => monthLabel(iso)).join(', ')
+      : month;
 
   const bodies = {
     balance_overdue: `Hi ${tenant},\n\nYour rent for ${month} is past due, including any applicable late fee. Balance due: ${amount}.\n\n${payLine}\n\n${sign}`,
     grace_warning: `Hi ${tenant},\n\nRent for ${month} was due on the 1st and your account is in the grace period. Balance due: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
     due_reminder: `Hi ${tenant},\n\nRent for ${month} is due today. Balance due: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
     invoice_notice: `Hi ${tenant},\n\nYour rent charge for ${month} has been posted. Balance due on the 1st: ${amount}.\n\n${policy}\n\n${payLine}\n\n${sign}`,
+    invoice_catchup_notice:
+      `Hi ${tenant},\n\nWe apologize for the inconvenience — rent charges for the following month(s) were posted later than usual: ${monthsList}.\n\n` +
+      `Because this delay was on our side, no late fee is applied to these catch-up charges. Your current balance due is ${amount}.\n\n` +
+      `${payLine}\n\n${sign}`,
   };
 
   const subjects = {
@@ -82,6 +99,7 @@ export function buildCommunicationMessage({ messageType, person, period, amountC
     grace_warning: `Rent grace period — ${month}`,
     due_reminder: `Rent due today — ${month}`,
     invoice_notice: `Rent charge posted — ${month}`,
+    invoice_catchup_notice: `Rent charges posted (catch-up) — apology`,
   };
 
   return {
@@ -110,11 +128,16 @@ export function selectCommunicationForLease({
 
   const candidates = [];
 
+  // Only current/prior months are "past due". Next month's charge (posted ~10 days early) is not.
+  const pastDueCents = openAll
+    .filter((invoice) => String(invoice.periodStart) <= period.periodStart)
+    .reduce((sum, invoice) => sum + invoiceRemainingCents(invoice), 0);
+
   if (unpaidMonth.some((invoice) => invoiceHasLateFee(invoice, baseCents)) || day > graceEndDay) {
     const lastOverdue = commState?.lastMessageType === 'balance_overdue' ? commState.lastSentDate : '';
     const repeatOk =
       !lastOverdue || daysSinceIsoDate(lastOverdue, today) >= OVERDUE_REPEAT_DAYS || day <= graceEndDay + 1;
-    if (day > graceEndDay && repeatOk && totalDue > 0) {
+    if (day > graceEndDay && repeatOk && pastDueCents > 0) {
       candidates.push({
         messageType: 'balance_overdue',
         period,
@@ -139,8 +162,7 @@ export function selectCommunicationForLease({
     });
   }
 
-  const schedulePeriod = billingPeriodForSchedulingDay(now);
-  if (schedulePeriod) {
+  for (const schedulePeriod of billingPeriodsForLookback(now)) {
     const scheduleInvoices = invoicesForPeriod(
       invoices,
       lease.id,
@@ -154,6 +176,7 @@ export function selectCommunicationForLease({
         period: schedulePeriod,
         amountCents: totalDue || invoiceRemainingCents(scheduleInvoices[0]),
       });
+      break;
     }
   }
 

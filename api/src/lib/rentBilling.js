@@ -1,4 +1,4 @@
-import { invoiceRemainingCents } from './invoices.js';
+import { invoiceLateFeeExempt, invoiceRemainingCents } from './invoices.js';
 import { processingCheckoutCents } from './rentPayments.js';
 import {
   activeLeasesForPeriod,
@@ -13,6 +13,8 @@ import {
 import { ensureInvoiceForLeasePeriod, findInvoiceForPeriod } from './payments.js';
 
 export const INVOICE_LEAD_DAYS = 10;
+/** If the daily job misses the exact lead day, still create that month's charge within this window. */
+export const INVOICE_SCHEDULE_LOOKBACK_DAYS = 3;
 
 export function nyTodayIso(now = new Date()) {
   const { year, month, day } = nyDateParts(now);
@@ -26,10 +28,9 @@ export function addDaysToIsoDate(isoDate, days) {
   return date.toISOString().slice(0, 10);
 }
 
-/** When today (Eastern time) is exactly 10 days before the 1st, return that billing month. */
-export function billingPeriodForSchedulingDay(now = new Date()) {
-  const today = nyTodayIso(now);
-  const dueDate = addDaysToIsoDate(today, INVOICE_LEAD_DAYS);
+/** Billing period whose charge posts on this Eastern calendar day (10 days before the 1st). */
+export function billingPeriodForIsoDate(isoDate) {
+  const dueDate = addDaysToIsoDate(isoDate, INVOICE_LEAD_DAYS);
   if (!dueDate.endsWith('-01')) return null;
   const [year, month] = dueDate.split('-').map(Number);
   const mm = String(month).padStart(2, '0');
@@ -37,39 +38,84 @@ export function billingPeriodForSchedulingDay(now = new Date()) {
   return {
     periodStart: `${year}-${mm}-01`,
     periodEnd: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+    schedulingDay: isoDate,
   };
 }
 
-/** Creates next month's charge in SQL. Prior open balances stay on their own invoices. */
+/** When today (Eastern time) is exactly 10 days before the 1st, return that billing month. */
+export function billingPeriodForSchedulingDay(now = new Date()) {
+  return billingPeriodForIsoDate(nyTodayIso(now));
+}
+
+/**
+ * Billing periods whose scheduling day falls in [today - lookback, today] (Eastern).
+ * Used so a missed daily run still posts the charge while tenants still have notice.
+ */
+export function billingPeriodsForLookback(now = new Date(), lookbackDays = INVOICE_SCHEDULE_LOOKBACK_DAYS) {
+  const today = nyTodayIso(now);
+  const periods = [];
+  const seen = new Set();
+  for (let offset = 0; offset <= lookbackDays; offset += 1) {
+    const day = addDaysToIsoDate(today, -offset);
+    const period = billingPeriodForIsoDate(day);
+    if (!period || seen.has(period.periodStart)) continue;
+    seen.add(period.periodStart);
+    periods.push(period);
+  }
+  return periods;
+}
+
+/** Creates charges for scheduling days in the lookback window. Prior open balances stay on their own invoices. */
 export async function runRentInvoiceScheduler(store, _env = process.env, now = new Date()) {
-  const period = billingPeriodForSchedulingDay(now);
-  if (!period) {
-    return { skipped: true, reason: 'not_scheduling_day', created: 0 };
+  const periods = billingPeriodsForLookback(now);
+  if (!periods.length) {
+    return { skipped: true, reason: 'not_scheduling_day', created: 0, periods: [] };
   }
 
   const [leases, invoices] = await Promise.all([store.listLeases(), store.listInvoices()]);
-  const active = activeLeasesForPeriod(leases, period.periodStart, period.periodEnd);
-
   let created = 0;
   const errors = [];
+  const periodSummaries = [];
 
-  for (const lease of active) {
-    try {
-      const existing = findInvoiceForPeriod(invoices, lease.id, period.periodStart, period.periodEnd);
-      if (existing) continue;
-      await ensureInvoiceForLeasePeriod(store, lease, period.periodStart, period.periodEnd);
-      created += 1;
-    } catch (err) {
-      errors.push({ leaseId: lease.id, error: err instanceof Error ? err.message : 'unknown' });
+  for (const period of periods) {
+    const active = activeLeasesForPeriod(leases, period.periodStart, period.periodEnd);
+    let periodCreated = 0;
+    for (const lease of active) {
+      try {
+        const existing = findInvoiceForPeriod(invoices, lease.id, period.periodStart, period.periodEnd);
+        if (existing) continue;
+        const invoice = await ensureInvoiceForLeasePeriod(store, lease, period.periodStart, period.periodEnd, {
+          billingSource: 'scheduler',
+        });
+        invoices.push(invoice);
+        created += 1;
+        periodCreated += 1;
+      } catch (err) {
+        errors.push({ leaseId: lease.id, periodStart: period.periodStart, error: err instanceof Error ? err.message : 'unknown' });
+      }
     }
+    periodSummaries.push({
+      periodStart: period.periodStart,
+      periodEnd: period.periodEnd,
+      schedulingDay: period.schedulingDay,
+      created: periodCreated,
+      leaseCount: active.length,
+    });
   }
 
-  return { skipped: false, period, created, leaseCount: active.length, errors };
+  return {
+    skipped: false,
+    period: periods[0],
+    periods: periodSummaries,
+    created,
+    leaseCount: periodSummaries.reduce((sum, row) => sum + row.leaseCount, 0),
+    errors,
+  };
 }
 
 export async function applyLateFeeToInvoice(store, invoice, lease) {
   const baseCents = expectedMonthlyChargeCents(lease);
-  if (invoiceHasLateFee(invoice, baseCents) || invoice.status === 'paid') {
+  if (invoiceLateFeeExempt(invoice) || invoiceHasLateFee(invoice, baseCents) || invoice.status === 'paid') {
     return { applied: false, invoice };
   }
   const updated = await store.updateInvoice(invoice.id, {
