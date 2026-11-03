@@ -1,7 +1,7 @@
 # Data persistence
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-09-27  
+**Last updated:** 2026-11-03  
 **Scope:** Where durable data lives, record shapes, and access paths.
 
 There is **one application database**: Azure SQL (`wcp`). It is the single source of truth for charges, payments, and balances. Git holds public brand copy only. Stripe only processes payments (Checkout); it holds no invoices or balances of ours.
@@ -15,7 +15,7 @@ Azure SQL lives in **Central US** (`sql_location = centralus`). East US and East
 | **Public brand** | Git (`src/content/`) | Property listings, about page; per-unit marketing copy only |
 | **Operations and money** | Azure SQL | People, applications, leases, charges (`invoices`), payments, balances, service requests, office users, **unit availability** |
 | **Payment processing** | Stripe | Checkout sessions, card/ACH charges, receipts (linked from `payments.receipt_url`) |
-| **Secrets** | Key Vault → SWA app settings; shared KV also holds the GitHub App PEM for CI | API keys, SQL connection, External ID, Turnstile, `wcp-terraform` credentials |
+| **Secrets** | Key Vault → SWA app settings; shared KV also holds the GitHub App PEM for CI and the Turnstile site key for CD builds | API keys, SQL connection, External ID, Turnstile, `wcp-terraform` credentials |
 | **Staff identity** | Microsoft Entra (workforce) | Who can complete office login |
 | **Renter identity** | Microsoft Entra External ID | Who can complete portal login |
 
@@ -74,3 +74,4 @@ Local/dev without `SQL_CONNECTION_STRING` uses the in-memory store (`createMemor
 - Office `GET /api/office/units/{id}` returns unit detail for the manage panel: health, `balanceDueCents`, open invoices, lease progress, recent payments for the active lease, open service requests, and closed requests from the last 90 days (by `created_at` until `closed_at` exists).
 - One timer, `rentDailyJobs`, runs late fees, then next-month charges, then communications, in that order, on a standalone Flex Consumption Function App (`func-wcp-jobs-<env>`), because SWA managed Functions are HTTP-only. It shares `api/src/lib` and reads/writes the same Azure SQL database as the SWA API, via its own `SQL_CONNECTION_STRING` app setting. Prod runs daily at 13:00 UTC; staging is disabled and runs on demand ([rent-jobs.md](../runbooks/rent-jobs.md)). One combined run keeps SQL serverless awake for a single auto-pause window. Charges are created in SQL only, 10 days before the 1st (for example, September 21 for October rent; dates use Eastern time); the $50 late fee is added after the grace period unless the month is paid in full (partial payments do not prevent it). Online payment is gated by `RENT_PAYMENTS_ENABLED`; tenant email is gated by `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (preview delivers to `CONTACT_NOTIFY_EMAIL`). Staff preview queued messages via `GET /api/office/communications/preview?date=YYYY-MM-DD`.
 - CI Terraform plan downloads `GITHUB-APP-PRIVATE-KEY` from `kv-wcp-shared` (`az keyvault secret download`, never `show`) and mints a short-lived installation token. App id and installation id are repo Actions variables (`GH_APP_ID`, `GH_APP_INSTALLATION_ID`) set by `scripts/register-wcp-github-app.mjs`, not by Terraform. The PEM is not a Terraform data source. Local bootstrap apply still uses `GH_TOKEN` from `gh auth token` to write `AZURE_TF_*` Actions variables.
+- `CD: main` build downloads `TURNSTILE-SITE-KEY` from `kv-wcp-shared` (same download pattern) into `PUBLIC_TURNSTILE_SITE_KEY` for the Astro build. `TURNSTILE-SECRET-KEY` stays on SWA app settings via Terraform (`TURNSTILE_SECRET`). CI static analysis may keep Cloudflare’s dummy sitekey; CD rejects `REPLACE_ME` and the dummy key.
