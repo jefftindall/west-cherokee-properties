@@ -18,10 +18,39 @@ jobs:
   build_release:
     name: Build release
     runs-on: ubuntu-latest
-    env:
-      PUBLIC_TURNSTILE_SITE_KEY: "1x00000000000000000000AA"
+    # staging env subject matches wcp-gha-terraform OIDC (repo AZURE_TF_* vars).
+    environment: staging
     steps:
       - uses: actions/checkout@v7
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_TF_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TF_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_TF_SUBSCRIPTION_ID }}
+
+      # Public site key, but still load via download (never `show`) and mask in logs.
+      - name: Load Turnstile site key
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d)"
+          cleanup() { rm -rf "$dir"; }
+          trap cleanup EXIT
+          az keyvault secret download \
+            --vault-name kv-wcp-shared \
+            --name TURNSTILE-SITE-KEY \
+            --file "$dir/sitekey" \
+            --encoding utf-8 \
+            --output none \
+            --only-show-errors
+          key="$(tr -d '\r\n' < "$dir/sitekey")"
+          if [[ -z "$key" || "$key" == "REPLACE_ME" || "$key" == "1x00000000000000000000AA" ]]; then
+            echo "TURNSTILE-SITE-KEY is missing, REPLACE_ME, or still the Cloudflare test sitekey" >&2
+            exit 1
+          fi
+          echo "::add-mask::$key"
+          echo "PUBLIC_TURNSTILE_SITE_KEY=$key" >> "$GITHUB_ENV"
 
       - name: Setup Node
         uses: actions/setup-node@v7

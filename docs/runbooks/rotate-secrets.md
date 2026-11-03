@@ -66,7 +66,7 @@ Terraform `lifecycle.ignore_changes = [value]` on these secrets: vault updates s
 |--------|--------|-----|
 | `SITE-CONTACT-EMAIL` | Public inbox | command above (`info@westcherokee.com`) |
 | `SITE-CONTACT-PHONE` | Public phone | command above (`678-885-7368`) |
-| `TURNSTILE-SITE-KEY` | Cloudflare Turnstile → Site key | command above |
+| `TURNSTILE-SITE-KEY` | Cloudflare Turnstile → Site key (CD build reads this into `PUBLIC_TURNSTILE_SITE_KEY`) | command above |
 | `TURNSTILE-SECRET-KEY` | Cloudflare Turnstile → Secret key | `--file` into `kv-wcp-shared` |
 | `ALERT-EMAIL` | Budget / monitor inbox | `--file` into `kv-wcp-shared` |
 | `ACS-CONNECTION-STRING` | Azure Communication Services | `--file` into `kv-wcp-shared` |
