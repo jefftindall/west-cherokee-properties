@@ -19,7 +19,7 @@ What each step actually does is still gated by app settings from Terraform: `REN
 
 ## Deploy
 
-Terraform (`infra/modules/site/rent_jobs.tf`) creates the app, plan, and storage account and writes the `AZURE_RENT_JOBS_FUNCTION_APP_NAME` environment variable. `CD: main` builds the package once (`npm run package:rent-jobs`: `api/src/jobs` + `api/src/lib`, no HTTP handlers) and deploys it after each SWA deploy. The deploy steps skip until that variable exists, so the first merge needs `CD: terraform` to finish and then one more `CD: main` run.
+Terraform (`infra/modules/site/rent_jobs.tf`) creates the app, plan, and storage account and writes the `AZURE_RENT_JOBS_FUNCTION_APP_NAME` environment variable. `CD: main` applies staging Terraform before staging deploy when `infra/` changed, builds the package once (`npm run package:rent-jobs`: `api/src/jobs` + `api/src/lib`, no HTTP handlers), and deploys it after each SWA deploy. Later jobs in the same run see env vars written by that apply. The deploy steps skip until the variable exists.
 
 ## Run on demand (staging, or a prod re-run)
 
@@ -43,7 +43,7 @@ unset KEY
 
 ## Turn the schedule on or off
 
-Change `rent_jobs_schedule_enabled` in `infra/environments/<env>/main.tf` and merge; `CD: terraform` applies it. The portal Enable/Disable button works for an emergency stop, but the next Terraform apply resets it.
+Change `rent_jobs_schedule_enabled` in `infra/environments/<env>/main.tf` and merge; `CD: main` applies it (staging TF before staging deploy; prod TF after staging verify). The portal Enable/Disable button works for an emergency stop, but the next Terraform apply resets it.
 
 ## Cost
 

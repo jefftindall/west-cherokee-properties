@@ -1,6 +1,6 @@
 # Phased delivery
 
-_Last updated: 2026-08-31. Azure SQL is in Central US (East US / East US 2 still `ProvisioningDisabled`). Env Terraform applies via `CD: terraform` after merge. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned. Office operations portal phase 2 (automated billing + tenant comms) is done; renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md)._
+_Last updated: 2026-11-03. Azure SQL is in Central US (East US / East US 2 still `ProvisioningDisabled`). Env Terraform applies inside `CD: main` after merge when `infra/` changed. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned. Office operations portal phase 2 (automated billing + tenant comms) is done; renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md)._
 
 | Phase | Status | Notes |
 |-------|--------|-------|
