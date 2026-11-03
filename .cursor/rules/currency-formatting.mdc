@@ -1,0 +1,23 @@
+---
+description: USD currency display must use thousands separators via shared formatMoney helpers
+globs: src/**/*.{astro,ts,tsx},api/src/**/*.js,docs/architecture/ui-style-guide.md
+alwaysApply: false
+---
+
+# Currency formatting
+
+User-visible money is always USD with thousands separators and two decimals (e.g. `$1,550.00`).
+
+## Required helpers
+
+- Site / Astro / browser: `formatMoney` from `src/lib/money.ts`
+- API messages, emails, lease/legal docs: `formatMoney` from `api/src/lib/leaseTerms.js`
+
+Do not invent a third formatter. Do not use `` `$${(cents / 100).toFixed(2)}` `` for display — it drops grouping.
+
+## Allowed exceptions
+
+- `<input type="number">` values may stay ungrouped (`1550.00`)
+- Static marketing copy for small fixed fees (e.g. “$20 pet rent”) when not computed from cents
+
+See `docs/architecture/ui-style-guide.md` → **Currency**.

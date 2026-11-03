@@ -143,7 +143,7 @@ test('partitionServiceRequests splits open and recently closed by unit', () => {
 });
 
 test('buildUnitDetail assembles health, billing, lease progress, and requests', () => {
-  const active = lease();
+  const active = lease({ startDate: '2026-08-01' });
   const detail = buildUnitDetail({
     unit: { id: 'unit-124-w-cherokee-a', propertyId: 'prop-1', label: 'A', bedrooms: 2, bathrooms: 1, available: false },
     property: { id: 'prop-1', title: '124 W Cherokee Ave' },

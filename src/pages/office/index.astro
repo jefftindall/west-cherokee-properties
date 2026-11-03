@@ -8,7 +8,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <h1 class="font-display text-4xl text-pine">Dashboard</h1>
     <p class="mt-2 text-muted">
-      Unit health from live lease and invoice data. Green is current, yellow is within grace, red is late after the fee applies, vacant has no active lease.
+      Unit health from live lease and invoice data. Green is current, yellow is within grace for this month only, red is late (including any prior-month arrears), vacant has no active lease.
     </p>
     <div id="rent-roll" class="mt-8 grid gap-4 md:grid-cols-2"></div>
     <div id="dashboard-errors" class="mt-4"></div>
@@ -24,6 +24,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
     import { officeLinkFromHere } from '../../lib/officeNav.ts';
     type Health = 'green' | 'yellow' | 'red' | 'vacant';
     type DashboardUnit = {
@@ -79,10 +80,6 @@ import OfficeNav from '../../components/OfficeNav.astro';
     const root = document.getElementById('dashboard-root');
     const rentRoll = document.getElementById('rent-roll');
     const errors = document.getElementById('dashboard-errors');
-
-    function formatMoney(cents: number) {
-      return `$${(Number(cents) / 100).toFixed(2)}`;
-    }
 
     function renderRentRoll(roll: DashboardData['rentRoll']) {
       if (!rentRoll || !roll) return;

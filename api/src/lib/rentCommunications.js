@@ -1,5 +1,6 @@
 import { sendTenantEmail } from './acsNotify.js';
 import { invoiceRemainingCents } from './invoices.js';
+import { formatMoney } from './leaseTerms.js';
 import {
   billingPeriodForSchedulingDay,
   currentMonthPeriodFromNow,
@@ -51,9 +52,6 @@ export function portalPayUrl(env = process.env) {
   return `${site}/portal/invoices`;
 }
 
-function dollars(cents) {
-  return `$${(Number(cents) / 100).toFixed(2)}`;
-}
 
 function ordinal(day) {
   if (day >= 11 && day <= 13) return `${day}th`;
@@ -63,12 +61,12 @@ function ordinal(day) {
 export function buildCommunicationMessage({ messageType, person, period, amountCents, payUrl = portalPayUrl() }) {
   const tenant = person?.displayName || 'Tenant';
   const month = period ? monthLabel(period.periodStart) : 'this month';
-  const amount = dollars(amountCents);
+  const amount = formatMoney(amountCents);
   const graceEndDay = 1 + GRACE_DAYS;
   const payLine = `Pay online in the renter portal: ${payUrl}`;
   const policy =
-    `If the full balance is not paid by the end of the ${ordinal(graceEndDay)}, a ${dollars(LATE_FEE_CENTS)} late fee is added. ` +
-    `You can make partial payments (minimum ${dollars(MIN_PARTIAL_PAYMENT_CENTS)}) to lower your balance, ` +
+    `If the full balance is not paid by the end of the ${ordinal(graceEndDay)}, a ${formatMoney(LATE_FEE_CENTS)} late fee is added. ` +
+    `You can make partial payments (minimum ${formatMoney(MIN_PARTIAL_PAYMENT_CENTS)}) to lower your balance, ` +
     'but only payment in full within the grace period avoids the late fee.';
   const sign = '— West Cherokee Properties';
 

@@ -70,6 +70,7 @@ import PortalNav from '../../components/PortalNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
 
     type LateFee = {
       status: 'in_grace' | 'late_fee_applied' | 'full_payment_processing' | 'late_fee_pending' | 'upcoming' | 'current';
@@ -114,8 +115,7 @@ import PortalNav from '../../components/PortalNav.astro';
 
     let balance: Balance | null = null;
 
-    const money = (cents: number) =>
-      (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    const money = formatMoney;
 
     function longDate(iso: string) {
       return new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', {

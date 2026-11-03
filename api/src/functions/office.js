@@ -481,7 +481,32 @@ app.http('officeInvoicesGet', {
   route: 'office/invoices',
   handler: wrap(async (request) => {
     await permissionGate(request, PERMISSION.INVOICES_READ);
-    return jsonOk({ invoices: await getStore().listInvoices() });
+    const store = getStore();
+    const [invoices, leases, people, units, properties] = await Promise.all([
+      store.listInvoices(),
+      store.listLeases(),
+      store.listPeople(),
+      store.listUnits(),
+      store.listProperties(),
+    ]);
+    const leaseById = new Map(leases.map((row) => [row.id, row]));
+    const personById = new Map(people.map((row) => [row.id, row]));
+    const unitById = new Map(units.map((row) => [row.id, row]));
+    const propertyById = new Map(properties.map((row) => [row.id, row]));
+    const rows = invoices
+      .map((invoice) => {
+        const lease = leaseById.get(invoice.leaseId) || null;
+        const person = lease ? personById.get(lease.personId) || null : null;
+        const unit = lease ? unitById.get(lease.unitId) || null : null;
+        const property = unit ? propertyById.get(unit.propertyId) || null : null;
+        return { invoice, lease, person, unit, property };
+      })
+      .sort((a, b) => {
+        const byPeriod = String(b.invoice.periodStart).localeCompare(String(a.invoice.periodStart));
+        if (byPeriod !== 0) return byPeriod;
+        return String(a.invoice.id).localeCompare(String(b.invoice.id));
+      });
+    return jsonOk({ invoices: rows });
   }),
 });
 

@@ -29,6 +29,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
     import { mountOfficeBackLink } from '../../lib/officeNav.ts';
 
     const root = document.getElementById('list');
@@ -53,8 +54,19 @@ import OfficeNav from '../../components/OfficeNav.astro';
         root.innerHTML = rows.length
           ? `<ul class="space-y-2">${rows
               .map(
-                (i: { id: string; status: string; amountCents: number; periodStart: string }) =>
-                  `<li>${i.id} · ${i.periodStart} · ${i.status} · $${(i.amountCents / 100).toFixed(2)}</li>`,
+                (row: {
+                  invoice: { status: string; amountCents: number; periodStart: string };
+                  person?: { displayName?: string } | null;
+                  unit?: { label?: string } | null;
+                  property?: { title?: string } | null;
+                }) => {
+                  const property = row.property?.title || 'Property';
+                  const unit = row.unit?.label ? ` · Unit ${row.unit.label}` : '';
+                  const renter = row.person?.displayName || 'Tenant';
+                  const due = row.invoice.periodStart;
+                  const amount = formatMoney(row.invoice.amountCents);
+                  return `<li class="rounded border border-line bg-panel p-3">${property}${unit} · ${renter} · ${due} · ${row.invoice.status} · ${amount}</li>`;
+                },
               )
               .join('')}</ul>`
           : 'No invoices yet.';

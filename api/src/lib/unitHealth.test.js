@@ -48,7 +48,7 @@ test('vacant when there is no active lease', () => {
 });
 
 test('green when current-month invoices are paid', () => {
-  const active = lease();
+  const active = lease({ startDate: '2026-08-01' });
   const invoices = [
     {
       leaseId: active.id,
@@ -62,7 +62,7 @@ test('green when current-month invoices are paid', () => {
 });
 
 test('yellow when unpaid within grace (2nd through 4th)', () => {
-  const active = lease();
+  const active = lease({ startDate: '2026-08-01' });
   const invoices = [
     {
       leaseId: active.id,
@@ -75,8 +75,107 @@ test('yellow when unpaid within grace (2nd through 4th)', () => {
   assert.equal(computeUnitHealth({ lease: active, invoices, now: AUG_2_2026_NY }), 'yellow');
 });
 
+test('yellow within grace when prior months are paid and only current is open', () => {
+  const active = lease({ startDate: '2026-07-01' });
+  const invoices = [
+    {
+      leaseId: active.id,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      amountCents: 145000,
+      status: 'paid',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-08-01',
+      periodEnd: '2026-08-31',
+      amountCents: 145000,
+      status: 'open',
+    },
+  ];
+  assert.equal(computeUnitHealth({ lease: active, invoices, now: AUG_2_2026_NY }), 'yellow');
+});
+
+test('red within grace when a prior month is still open', () => {
+  const active = lease({ startDate: '2026-07-01' });
+  const invoices = [
+    {
+      leaseId: active.id,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      amountCents: 150000,
+      status: 'open',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-08-01',
+      periodEnd: '2026-08-31',
+      amountCents: 145000,
+      status: 'open',
+    },
+  ];
+  assert.equal(computeUnitHealth({ lease: active, invoices, now: AUG_2_2026_NY }), 'red');
+});
+
+test('red within grace when prior months were never invoiced (already overdue)', () => {
+  const active = lease({ startDate: '2025-12-01', endDate: '2026-11-30', rentCents: 155000 });
+  const invoices = [
+    {
+      leaseId: active.id,
+      periodStart: '2025-12-01',
+      periodEnd: '2025-12-31',
+      amountCents: 155000,
+      status: 'paid',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      amountCents: 155000,
+      status: 'paid',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-02-01',
+      periodEnd: '2026-02-28',
+      amountCents: 155000,
+      status: 'paid',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-03-01',
+      periodEnd: '2026-03-31',
+      amountCents: 155000,
+      status: 'paid',
+    },
+  ];
+  const nov3 = new Date('2026-11-03T15:00:00-05:00');
+  assert.equal(computeUnitHealth({ lease: active, invoices, now: nov3 }), 'red');
+});
+
+test('red when current month is paid but a prior month is still open', () => {
+  const active = lease({ startDate: '2026-07-01' });
+  const invoices = [
+    {
+      leaseId: active.id,
+      periodStart: '2026-07-01',
+      periodEnd: '2026-07-31',
+      amountCents: 150000,
+      status: 'open',
+    },
+    {
+      leaseId: active.id,
+      periodStart: '2026-08-01',
+      periodEnd: '2026-08-31',
+      amountCents: 145000,
+      status: 'paid',
+    },
+  ];
+  assert.equal(computeUnitHealth({ lease: active, invoices, now: AUG_2_2026_NY }), 'red');
+});
+
 test('red only after grace when a late fee is on the open invoice', () => {
-  const active = lease();
+  const active = lease({ startDate: '2026-08-01' });
   const invoices = [
     {
       leaseId: active.id,
@@ -90,7 +189,7 @@ test('red only after grace when a late fee is on the open invoice', () => {
 });
 
 test('after grace stays yellow until late fee is applied', () => {
-  const active = lease();
+  const active = lease({ startDate: '2026-08-01' });
   const invoices = [
     {
       leaseId: active.id,
@@ -104,7 +203,10 @@ test('after grace stays yellow until late fee is applied', () => {
 });
 
 test('day 1 with no invoice yet stays green', () => {
-  assert.equal(computeUnitHealth({ lease: lease(), invoices: [], now: AUG_1_2026_NY }), 'green');
+  assert.equal(
+    computeUnitHealth({ lease: lease({ startDate: '2026-08-01' }), invoices: [], now: AUG_1_2026_NY }),
+    'green',
+  );
 });
 
 test('invoicesForCurrentMonth filters by lease and period', () => {
@@ -136,7 +238,7 @@ test('buildDashboard groups five units across three properties', () => {
   const dashboard = buildDashboard({
     properties: SEEDED_PROPERTIES,
     units: SEEDED_UNITS,
-    leases: [lease()],
+    leases: [lease({ startDate: '2026-08-01' })],
     people: [{ id: 'person-1', displayName: 'Jordan', email: 'jordan@example.com' }],
     invoices: [],
     now: AUG_1_2026_NY,

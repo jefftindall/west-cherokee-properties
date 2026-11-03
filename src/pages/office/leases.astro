@@ -101,6 +101,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
     import { formatPersonLabel, renterSelectOptions, type OfficePerson } from '../../lib/officePeople.ts';
     import { mountOfficeBackLink, officeLinkFromHere } from '../../lib/officeNav.ts';
     type Unit = { id: string; label: string; propertyId: string };
@@ -440,7 +441,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
                 const pets = lease.terms?.petCount || 0;
                 return `<li class="rounded-lg border border-line bg-panel p-4">
                 <div class="font-semibold text-pine">${address}</div>
-                <div class="text-muted">${person ? formatPersonLabel(person) : lease.personId} · ${lease.status} · ${lease.startDate} – ${lease.endDate} · $${(lease.rentCents / 100).toFixed(2)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
+                <div class="text-muted">${person ? formatPersonLabel(person) : lease.personId} · ${lease.status} · ${lease.startDate} – ${lease.endDate} · ${formatMoney(lease.rentCents)} dwelling${pets ? ` + ${pets} pet(s)` : ''}</div>
                 <div class="mt-2 flex flex-wrap gap-3">
                   <a class="btn-ghost" href="${officeLinkFromHere(`/office/leases/${lease.id}`)}">View / print</a>
                   <a class="btn-ghost" href="/api/office/leases/${lease.id}/document?download=1">Download</a>

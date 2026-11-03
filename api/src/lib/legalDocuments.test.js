@@ -61,7 +61,7 @@ test('eviction notice fills tenant, premises, and seven-day language', async () 
   assert.match(document.html, /NOTICE TO PAY RENT OR QUIT/);
   assert.match(document.html, /L\. Elizabeth Blair/);
   assert.match(document.html, /10 B Falcon Circle/);
-  assert.match(document.html, /\$1790\.00/);
+  assert.match(document.html, /\$1,790\.00/);
   assert.match(document.html, /SEVEN \(7\) days/);
   assert.match(document.html, /West Cherokee Properties/);
   assert.match(document.filename, /eviction-notice/);

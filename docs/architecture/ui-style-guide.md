@@ -1,10 +1,10 @@
 # UI style guide
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-09-06  
-**Scope:** Brand tokens, layout primitives, buttons, and async interaction patterns for the public site, office, and portal.
+**Last updated:** 2026-11-03  
+**Scope:** Brand tokens, layout primitives, buttons, currency display, and async interaction patterns for the public site, office, and portal.
 
-Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). Client `/api` calls use [`src/lib/apiFetch.ts`](../../src/lib/apiFetch.ts) (backoff/retry). Office back-navigation helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
+Tokens live in [`src/styles/global.css`](../../src/styles/global.css). Brand constants live in [`src/lib/site.ts`](../../src/lib/site.ts). Currency display lives in [`src/lib/money.ts`](../../src/lib/money.ts) (site) and [`api/src/lib/leaseTerms.js`](../../api/src/lib/leaseTerms.js) `formatMoney` (API / emails / lease docs). Shared async helpers live in [`src/lib/uiFeedback.ts`](../../src/lib/uiFeedback.ts). Client `/api` calls use [`src/lib/apiFetch.ts`](../../src/lib/apiFetch.ts) (backoff/retry). Office back-navigation helpers live in [`src/lib/officeNav.ts`](../../src/lib/officeNav.ts). The wordmark is [`public/logo.png`](../../public/logo.png); the house mark is [`public/mark.png`](../../public/mark.png). Both files have a **transparent** background — do not place them on a black plate.
 
 ## Brand positioning
 
@@ -34,6 +34,28 @@ Drawn from the logo (blue house, orange “West Cherokee”, green “Properties
 | `line` | `#d7dce2` | Borders |
 
 Primary CTAs use **clay**. Do not use black as a section background. Headings and body use Source Sans 3.
+
+## Currency
+
+All user-visible money uses **USD with thousands separators and two decimal places** (e.g. `$1,550.00`, not `$1550.00`).
+
+| Surface | Helper |
+|---------|--------|
+| Astro / browser UI | `formatMoney(cents)` from [`src/lib/money.ts`](../../src/lib/money.ts) |
+| API errors, tenant emails, lease / legal docs | `formatMoney(cents)` from [`api/src/lib/leaseTerms.js`](../../api/src/lib/leaseTerms.js) |
+
+```typescript
+import { formatMoney } from '../lib/money.ts';
+
+formatMoney(155000); // "$1,550.00"
+```
+
+Rules:
+
+1. Pass **integer cents**; never format raw dollar floats for display.
+2. Do **not** hand-roll `` `$${(cents / 100).toFixed(2)}` `` — it omits grouping.
+3. Form `<input type="number">` values may stay ungrouped (`1550.00`); only **displayed** amounts need separators.
+4. Marketing copy with small fixed fees (e.g. “$20 each per month”) may stay as plain text when not computed from cents.
 
 ## Buttons
 

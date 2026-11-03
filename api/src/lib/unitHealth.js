@@ -126,10 +126,50 @@ export function invoiceHasLateFee(invoice, baseCents) {
   return Number(invoice.amountCents) > Number(baseCents);
 }
 
+function periodFullyPaid(invoices, leaseId, periodStart, periodEnd) {
+  const periodInvoices = invoicesForPeriod(invoices, leaseId, periodStart, periodEnd);
+  return periodInvoices.length > 0 && periodInvoices.every((invoice) => invoice.status === 'paid');
+}
+
+/**
+ * True when any billing month before the current calendar month is still unpaid
+ * (open invoice or missing invoice while the lease was active). Grace only applies
+ * to the current month — prior arrears are already late.
+ */
+export function hasPriorMonthArrears({ lease, invoices, now = new Date() }) {
+  if (!lease || lease.status !== 'active') return false;
+
+  const current = currentMonthPeriod(now);
+  if (
+    (invoices || []).some(
+      (invoice) =>
+        invoice.leaseId === lease.id &&
+        invoice.status !== 'paid' &&
+        String(invoice.periodStart) < current.periodStart,
+    )
+  ) {
+    return true;
+  }
+
+  for (let offset = -1; offset >= -120; offset -= 1) {
+    const period = monthPeriodForOffset(offset, now);
+    if (period.periodEnd < lease.startDate) break;
+    if (period.periodStart > lease.endDate) continue;
+    if (!periodFullyPaid(invoices, lease.id, period.periodStart, period.periodEnd)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function computeUnitHealth({ lease, invoices, now = new Date() }) {
   if (!lease || lease.status !== 'active') {
     return 'vacant';
   }
+
+  // Prior months are never "in grace" — show late even on the 2nd–4th.
+  if (hasPriorMonthArrears({ lease, invoices, now })) return 'red';
 
   const baseCents = expectedMonthlyChargeCents(lease);
   const monthInvoices = invoicesForCurrentMonth(invoices, lease.id, now);
