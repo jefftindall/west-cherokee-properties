@@ -1,3 +1,5 @@
+import { formatMoney } from './leaseTerms.js';
+
 export function normalizeInvoice(input) {
   const leaseId = String(input.leaseId || '').trim();
   const periodStart = String(input.periodStart || '').trim();
@@ -49,7 +51,7 @@ export async function applyPaymentToInvoice(store, invoice, paymentInput) {
   const remaining = invoiceRemainingCents(invoice);
   const amountCents = Number(paymentInput.amountCents ?? remaining);
   if (!Number.isInteger(amountCents) || amountCents < 1 || amountCents > remaining) {
-    const err = new Error(`Payment must be between $0.01 and the remaining $${(remaining / 100).toFixed(2)}.`);
+    const err = new Error(`Payment must be between $0.01 and the remaining ${formatMoney(remaining)}.`);
     err.name = 'ValidationError';
     throw err;
   }

@@ -116,10 +116,13 @@ export const UNIT_LEASE_DEFAULTS = {
   },
 };
 
+/** USD display for leases, emails, and API messages. Always includes thousands separators. */
 export function formatMoney(cents) {
   const value = Number(cents);
-  if (!Number.isFinite(value)) return '$0.00';
-  return `$${(value / 100).toFixed(2)}`;
+  if (!Number.isFinite(value)) {
+    return (0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  }
+  return (value / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
 export function petRentCents(petCount) {

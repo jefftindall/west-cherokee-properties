@@ -1,7 +1,7 @@
 # Office operations portal
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-09-27  
+**Last updated:** 2026-11-03  
 **Status:** in_progress (phase 2 complete)  
 **Depends on:** phases 7–9 (leases, payments, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
@@ -13,9 +13,9 @@ Rent due **1st of month**, **3-day grace**, **$50 late fee** ([`leaseTerms.js`](
 
 | Status | Rule |
 |--------|------|
-| **Green** | Active lease + current-month charges fully paid |
-| **Yellow** | Active lease + unpaid + within grace (2nd–4th) |
-| **Red** | Active lease + unpaid + after grace + late fee applied |
+| **Green** | Active lease + current-month charges fully paid + no prior-month arrears |
+| **Yellow** | Active lease + only the current month unpaid + within grace (2nd–4th) |
+| **Red** | Prior-month arrears (open or missing), or current month unpaid after grace with late fee applied |
 | **Vacant** | No active lease (neutral, not R/Y/G) |
 
 Health is **computed** from invoice/payment state (America/New_York), not stored as a separate score.
@@ -130,6 +130,7 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 ## Revision notes
 
+- 2026-11-03: Unit health — yellow (grace) only when the *current* month is the sole unpaid period; prior-month arrears (open or missing invoices) are always red, including on the 2nd–4th.
 - 2026-09-27: Dropped Stripe Invoicing. Azure SQL is the single source of truth for charges, payments, and balances; Stripe only processes payments. Added portal partial payments (OP-24) with a $100 minimum, fixed-amount Checkout, and clear late-fee policy. Daily job order is now late fees → charges → communications.
 - 2026-09-27: Timer hosting — replaced three `app.timer` schedulers in the SWA API (which never fire on managed Functions) with one `rentDailyJobs` timer on a standalone Flex Consumption Function App (OP-23). Prod runs daily at 13:00 UTC; staging disabled and run on demand. Budget raised to $70 for the SQL wake window.
 - 2026-08-31: Phase 2 — automated rent billing timers (`rentInvoiceScheduler`, `rentLateFeeScheduler`), tenant comms (`rentCommunicationScheduler`, `tenant_communication_state`, `communication_log`), `GET /api/office/communications/preview`, `RENT_COMMUNICATIONS_*` flags, Stripe invoice due-on-1st with prior-balance line items and no auto-email.

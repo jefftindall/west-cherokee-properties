@@ -23,6 +23,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
     import { mountOfficeBackLink, officeLinkFromHere } from '../../lib/officeNav.ts';
 
     type Health = 'green' | 'yellow' | 'red' | 'vacant';
@@ -112,10 +113,6 @@ import OfficeNav from '../../components/OfficeNav.astro';
         else showErrorBanner(host, 'Office API is not reachable locally unless Functions are running.');
         return false;
       }
-    }
-
-    function formatMoney(cents: number) {
-      return `$${(Number(cents) / 100).toFixed(2)}`;
     }
 
     function formatDate(iso: string) {

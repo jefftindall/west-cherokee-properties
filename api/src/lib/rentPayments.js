@@ -1,4 +1,5 @@
 import { applyPaymentToInvoice, invoiceRemainingCents } from './invoices.js';
+import { formatMoney } from './leaseTerms.js';
 import { ensureStripeCustomer } from './stripeCustomers.js';
 import { openInvoicesForLease } from './unitDetail.js';
 import {
@@ -18,10 +19,6 @@ export const MIN_PARTIAL_PAYMENT_CENTS = 10_000;
 export const CHECKOUT_EXPIRY_SECONDS = 31 * 60;
 const CHECKOUT_INTEGRATION_ID = 'wcp-rent-portal-kqvhmzta';
 const CHECKOUT_METADATA_KIND = 'rent';
-
-function dollars(cents) {
-  return `$${(Number(cents) / 100).toFixed(2)}`;
-}
 
 function validationError(message) {
   const err = new Error(message);
@@ -56,13 +53,13 @@ export function validatePaymentAmount(amountCents, balance) {
     throw validationError('There is no balance to pay right now.');
   }
   if (amountCents > balance.payableCents) {
-    throw validationError(`You can pay up to your balance of ${dollars(balance.payableCents)}.`);
+    throw validationError(`You can pay up to your balance of ${formatMoney(balance.payableCents)}.`);
   }
   if (amountCents < balance.minimumCents) {
     throw validationError(
       balance.payableCents < MIN_PARTIAL_PAYMENT_CENTS
-        ? `Your balance is ${dollars(balance.payableCents)}, under the ${dollars(MIN_PARTIAL_PAYMENT_CENTS)} minimum, so please pay the full balance.`
-        : `The minimum payment is ${dollars(MIN_PARTIAL_PAYMENT_CENTS)}.`,
+        ? `Your balance is ${formatMoney(balance.payableCents)}, under the ${formatMoney(MIN_PARTIAL_PAYMENT_CENTS)} minimum, so please pay the full balance.`
+        : `The minimum payment is ${formatMoney(MIN_PARTIAL_PAYMENT_CENTS)}.`,
     );
   }
 }

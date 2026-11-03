@@ -68,6 +68,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
       showApiExhaustedBanner,
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
+    import { formatMoney } from '../../lib/money.ts';
     import { mountOfficeBackLink, officeSuccessWithReturn } from '../../lib/officeNav.ts';
 
     type LeaseRow = {
@@ -98,10 +99,6 @@ import OfficeNav from '../../components/OfficeNav.astro';
     let units: UnitRow[] = [];
     let properties: PropertyRow[] = [];
     let people: PersonRow[] = [];
-
-    function formatMoney(cents: number) {
-      return `$${(Number(cents) / 100).toFixed(2)}`;
-    }
 
     function monthlyChargeCents(lease: LeaseRow) {
       const pets = Number(lease.terms?.petCount || 0);

@@ -86,7 +86,7 @@ test('processing bank payments reduce what can be paid now', () => {
 test('validatePaymentAmount enforces the minimum and the balance', () => {
   const balance = { payableCents: 145000, minimumCents: 10000 };
   assert.throws(() => validatePaymentAmount(9999, balance), /minimum payment is \$100\.00/);
-  assert.throws(() => validatePaymentAmount(145001, balance), /up to your balance of \$1450\.00/);
+  assert.throws(() => validatePaymentAmount(145001, balance), /up to your balance of \$1,450\.00/);
   assert.throws(() => validatePaymentAmount(12.5, balance), /dollars and cents/);
   validatePaymentAmount(10000, balance);
   validatePaymentAmount(145000, balance);

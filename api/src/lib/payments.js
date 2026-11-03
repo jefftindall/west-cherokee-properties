@@ -1,4 +1,4 @@
-import { monthlyChargeCents } from './leaseTerms.js';
+import { formatMoney, monthlyChargeCents } from './leaseTerms.js';
 import { applyPaymentToInvoice, invoiceRemainingCents } from './invoices.js';
 import { monthPeriodForOffset } from './unitHealth.js';
 
@@ -61,7 +61,7 @@ export async function recordManualPayment(store, {
     throw err;
   }
   if (paymentAmount > remaining) {
-    const err = new Error(`Amount is more than the remaining $${(remaining / 100).toFixed(2)} on this invoice.`);
+    const err = new Error(`Amount is more than the remaining ${formatMoney(remaining)} on this invoice.`);
     err.name = 'ValidationError';
     throw err;
   }
