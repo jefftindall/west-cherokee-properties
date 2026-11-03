@@ -4,6 +4,7 @@ import {
   addDaysToIsoDate,
   applyLateFeeToInvoice,
   billingPeriodForSchedulingDay,
+  billingPeriodsForLookback,
   nyTodayIso,
   runRentInvoiceScheduler,
   runRentLateFeeScheduler,
@@ -13,11 +14,25 @@ import { LATE_FEE_CENTS } from './unitHealth.js';
 
 test('billingPeriodForSchedulingDay returns February when today is Jan 22', () => {
   const period = billingPeriodForSchedulingDay(new Date('2026-01-22T17:00:00.000Z'));
-  assert.deepEqual(period, { periodStart: '2026-02-01', periodEnd: '2026-02-28' });
+  assert.deepEqual(period, {
+    periodStart: '2026-02-01',
+    periodEnd: '2026-02-28',
+    schedulingDay: '2026-01-22',
+  });
 });
 
 test('billingPeriodForSchedulingDay returns null on non-scheduling days', () => {
   assert.equal(billingPeriodForSchedulingDay(new Date('2026-01-21T17:00:00.000Z')), null);
+});
+
+test('billingPeriodsForLookback includes a scheduling day up to 3 days late', () => {
+  const within = billingPeriodsForLookback(new Date('2026-01-25T17:00:00.000Z'));
+  assert.equal(within.length, 1);
+  assert.equal(within[0].periodStart, '2026-02-01');
+  assert.equal(within[0].schedulingDay, '2026-01-22');
+
+  const tooLate = billingPeriodsForLookback(new Date('2026-01-26T17:00:00.000Z'));
+  assert.deepEqual(tooLate, []);
 });
 
 test('addDaysToIsoDate handles month boundaries', () => {
@@ -41,6 +56,41 @@ test('runRentInvoiceScheduler creates invoices on scheduling day without Stripe'
   const invoices = await store.listInvoices();
   assert.equal(invoices.length, 1);
   assert.equal(invoices[0].periodStart, '2026-02-01');
+  assert.equal(invoices[0].billingSource, 'scheduler');
+});
+
+test('runRentInvoiceScheduler catch-up within lookback creates the missed month', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+
+  const result = await runRentInvoiceScheduler(store, {}, new Date('2026-01-25T17:00:00.000Z'));
+  assert.equal(result.skipped, false);
+  assert.equal(result.created, 1);
+  assert.equal((await store.listInvoices())[0].periodStart, '2026-02-01');
+});
+
+test('runRentInvoiceScheduler does not create when lookback misses the scheduling day', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+
+  const result = await runRentInvoiceScheduler(store, {}, new Date('2026-01-26T17:00:00.000Z'));
+  assert.equal(result.skipped, true);
+  assert.equal(result.created, 0);
+  assert.equal((await store.listInvoices()).length, 0);
 });
 
 test('runRentLateFeeScheduler applies late fee after grace', async () => {
@@ -65,6 +115,28 @@ test('runRentLateFeeScheduler applies late fee after grace', async () => {
   assert.equal(result.applied, 1);
   const invoices = await store.listInvoices();
   assert.equal(invoices[0].amountCents, 145000 + LATE_FEE_CENTS);
+});
+
+test('applyLateFeeToInvoice skips catch-up invoices', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  const invoice = await store.createInvoice({
+    leaseId: lease.id,
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    amountCents: 145000,
+    billingSource: 'catchup',
+  });
+  const result = await applyLateFeeToInvoice(store, invoice, lease);
+  assert.equal(result.applied, false);
+  assert.equal(result.invoice.amountCents, 145000);
 });
 
 test('applyLateFeeToInvoice is idempotent', async () => {

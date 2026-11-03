@@ -86,6 +86,28 @@ test('buildCommunicationMessage includes tenant name, portal link, and late-fee 
   assert.match(content.plainText, /partial payments \(minimum \$100\.00\)/);
 });
 
+test('selectCommunicationForLease still offers invoice_notice within lookback', () => {
+  const lease = { id: 'lease-1', status: 'active', rentCents: 100000, terms: {} };
+  const invoices = [
+    {
+      id: 'inv-1',
+      leaseId: 'lease-1',
+      periodStart: '2026-02-01',
+      periodEnd: '2026-02-28',
+      amountCents: 100000,
+      status: 'open',
+    },
+  ];
+  const selected = selectCommunicationForLease({
+    lease,
+    invoices,
+    commState: null,
+    now: new Date('2026-01-25T17:00:00.000Z'),
+  });
+  assert.equal(selected?.messageType, 'invoice_notice');
+  assert.equal(selected?.period.periodStart, '2026-02-01');
+});
+
 test('reminders use the remaining balance after a partial payment', () => {
   const selected = selectCommunicationForLease({
     lease: { id: 'lease-1', status: 'active', rentCents: 100000, terms: {} },

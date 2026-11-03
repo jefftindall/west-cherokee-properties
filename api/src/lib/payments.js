@@ -17,7 +17,7 @@ export function findInvoiceForPeriod(invoices, leaseId, periodStart, periodEnd) 
   );
 }
 
-export async function ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd) {
+export async function ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd, options = {}) {
   const invoices = await store.listInvoices();
   const existing = findInvoiceForPeriod(invoices, lease.id, periodStart, periodEnd);
   if (existing) return existing;
@@ -26,6 +26,7 @@ export async function ensureInvoiceForLeasePeriod(store, lease, periodStart, per
     periodStart,
     periodEnd,
     amountCents: monthlyChargeCents(lease.rentCents, lease.terms?.petCount),
+    billingSource: options.billingSource || 'scheduler',
   });
 }
 
@@ -98,7 +99,9 @@ export async function recordLeasePeriodPayment(store, {
     throw err;
   }
 
-  const invoice = await ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd);
+  const invoice = await ensureInvoiceForLeasePeriod(store, lease, periodStart, periodEnd, {
+    billingSource: 'payment',
+  });
 
   return recordManualPayment(store, {
     invoice,

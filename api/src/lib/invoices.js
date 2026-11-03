@@ -1,5 +1,17 @@
 import { formatMoney } from './leaseTerms.js';
 
+export const BILLING_SOURCES = ['scheduler', 'catchup', 'office', 'payment'];
+
+export function normalizeBillingSource(value) {
+  const source = String(value || '').trim().toLowerCase();
+  return BILLING_SOURCES.includes(source) ? source : 'scheduler';
+}
+
+/** Catch-up invoices were posted late; automatic late fees do not apply. */
+export function invoiceLateFeeExempt(invoice) {
+  return normalizeBillingSource(invoice?.billingSource) === 'catchup';
+}
+
 export function normalizeInvoice(input) {
   const leaseId = String(input.leaseId || '').trim();
   const periodStart = String(input.periodStart || '').trim();
@@ -24,6 +36,7 @@ export function normalizeInvoice(input) {
     amountCents,
     paidCents: status === 'paid' ? Math.max(Number(input.paidCents) || 0, amountCents) : Number(input.paidCents) || 0,
     status,
+    billingSource: normalizeBillingSource(input.billingSource),
     stripeInvoiceId: input.stripeInvoiceId || '',
     hostedInvoiceUrl: input.hostedInvoiceUrl || '',
     receiptUrl: input.receiptUrl || '',

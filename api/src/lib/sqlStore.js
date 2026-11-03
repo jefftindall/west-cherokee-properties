@@ -358,9 +358,10 @@ export function createSqlStore(connectionString) {
         .input('amountCents', sql.Int, row.amountCents)
         .input('paidCents', sql.Int, row.paidCents)
         .input('status', sql.NVarChar, row.status)
+        .input('billingSource', sql.NVarChar, row.billingSource)
         .query(
-          `INSERT INTO dbo.invoices (id, lease_id, period_start, period_end, amount_cents, paid_cents, status)
-           VALUES (@id, @leaseId, @periodStart, @periodEnd, @amountCents, @paidCents, @status)`,
+          `INSERT INTO dbo.invoices (id, lease_id, period_start, period_end, amount_cents, paid_cents, status, billing_source)
+           VALUES (@id, @leaseId, @periodStart, @periodEnd, @amountCents, @paidCents, @status, @billingSource)`,
         );
       return row;
     },
@@ -371,11 +372,12 @@ export function createSqlStore(connectionString) {
                CONVERT(char(10), period_start, 23) AS periodStart,
                CONVERT(char(10), period_end, 23) AS periodEnd,
                amount_cents AS amountCents, paid_cents AS paidCents, status,
+               billing_source AS billingSource,
                stripe_invoice_id AS stripeInvoiceId,
                hosted_invoice_url AS hostedInvoiceUrl,
                receipt_url AS receiptUrl
         FROM dbo.invoices`);
-      return result.recordset;
+      return result.recordset.map((row) => normalizeInvoice(row));
     },
     async getInvoice(id) {
       const rows = await this.listInvoices();
