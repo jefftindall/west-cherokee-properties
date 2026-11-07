@@ -1,23 +1,20 @@
-import { sendTenantEmail } from './acsNotify.js';
 import { ensureInvoiceForLeasePeriod, findInvoiceForPeriod } from './payments.js';
-import { nyTodayIso } from './rentBilling.js';
-import { buildCommunicationMessage, portalPayUrl } from './rentCommunications.js';
-import {
-  rentCommunicationsEnabled,
-  rentCommunicationsPreview,
-} from './stripeWebhook.js';
+import { sendOneOffTenantCommunication } from './rentCommunications.js';
+import { rentCommunicationsPreview } from './stripeWebhook.js';
 import { billingMonthsThroughLease, computeBalanceDue, openInvoicesForLease } from './unitDetail.js';
 import { monthLabel } from './unitHealth.js';
 
 /**
  * Create missing invoices for active leases through the current month.
- * Catch-up charges are late-fee exempt and get an apologetic notice.
+ * Catch-up charges are late-fee exempt. Email is opt-in via notify (default false)
+ * and does not require per-renter automatic-communications consent.
  */
 export async function runInvoiceCatchUp(
   store,
   {
     leaseId = null,
     dryRun = false,
+    notify = false,
     env = process.env,
     now = new Date(),
   } = {},
@@ -41,15 +38,12 @@ export async function runInvoiceCatchUp(
     throw err;
   }
 
-  const today = nyTodayIso(now);
   const leaseResults = [];
   let created = 0;
   let emailed = 0;
   const errors = [];
-
-  const enabled = rentCommunicationsEnabled(env);
+  const wantNotify = Boolean(notify);
   const preview = rentCommunicationsPreview(env);
-  const canEmail = enabled || preview;
 
   for (const lease of active) {
     const periods = billingMonthsThroughLease(lease, now);
@@ -98,54 +92,35 @@ export async function runInvoiceCatchUp(
     let email = { skipped: true, reason: 'no_missing_periods' };
     if (missing.length === 0) {
       email = { skipped: true, reason: 'no_missing_periods' };
+    } else if (!wantNotify) {
+      email = { skipped: true, reason: 'notify_disabled' };
     } else if (dryRun) {
-      email = { skipped: true, reason: 'dry_run', wouldSend: Boolean(person?.email && canEmail) };
+      email = {
+        skipped: true,
+        reason: 'dry_run',
+        wouldSend: Boolean(person?.email),
+      };
     } else if (!createdInvoices.length) {
       email = { skipped: true, reason: 'nothing_created' };
-    } else if (!canEmail) {
-      email = { skipped: true, reason: 'communications_disabled' };
-    } else if (!person?.email) {
-      email = { skipped: true, reason: 'no_tenant_email' };
     } else {
-      const existingLog = await store.getCommunicationLogForLeaseDate(lease.id, today);
-      if (existingLog) {
-        email = { skipped: true, reason: 'already_sent_today' };
-      } else {
-        try {
-          const balanceDueCents = computeBalanceDue(lease, invoices);
-          const content = buildCommunicationMessage({
-            messageType: 'invoice_catchup_notice',
-            person,
-            period: { periodStart: createdInvoices[0].periodStart },
-            amountCents: balanceDueCents,
-            payUrl: portalPayUrl(env),
-            catchupMonths: createdInvoices.map((row) => row.periodStart),
-          });
-          await sendTenantEmail({
-            to: person.email,
-            subject: content.subject,
-            plainText: content.plainText,
-            preview,
-          });
-          await store.createCommunicationLog({
-            leaseId: lease.id,
-            messageType: 'invoice_catchup_notice',
-            sentDate: today,
-            recipientEmail: preview ? String(env.CONTACT_NOTIFY_EMAIL || person.email) : person.email,
-            preview,
-            periodStart: createdInvoices[0].periodStart,
-          });
-          await store.upsertTenantCommunicationState(lease.id, {
-            lastSentDate: today,
-            lastMessageType: 'invoice_catchup_notice',
-          });
-          emailed += 1;
-          email = { skipped: false, sent: true, preview, subject: content.subject };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'unknown';
-          email = { skipped: true, reason: 'send_failed', error: message };
-          errors.push({ leaseId: lease.id, error: message });
-        }
+      try {
+        const balanceDueCents = computeBalanceDue(lease, invoices);
+        const result = await sendOneOffTenantCommunication(store, {
+          leaseId: lease.id,
+          person,
+          messageType: 'invoice_catchup_notice',
+          amountCents: balanceDueCents,
+          periodStart: createdInvoices[0].periodStart,
+          catchupMonths: createdInvoices.map((row) => row.periodStart),
+          env,
+          now,
+        });
+        email = result;
+        if (!result.skipped) emailed += 1;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'unknown';
+        email = { skipped: true, reason: 'send_failed', error: message };
+        errors.push({ leaseId: lease.id, error: message });
       }
     }
 
@@ -166,6 +141,8 @@ export async function runInvoiceCatchUp(
   return {
     asOf: now.toISOString(),
     dryRun: Boolean(dryRun),
+    notify: wantNotify,
+    preview,
     leaseCount: active.length,
     created,
     emailed,

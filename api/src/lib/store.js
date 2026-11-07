@@ -38,7 +38,7 @@ export function createMemoryStore() {
       clone(propertyId ? db.units.filter((u) => u.propertyId === propertyId) : db.units),
     getUnit: async (id) => clone(db.units.find((u) => u.id === id) || null),
 
-    async upsertPerson({ displayName, email = '', phone = '' }) {
+    async upsertPerson({ displayName, email = '', phone = '', autoCommunicationsEnabled }) {
       const contact = resolvePersonContact({ email, phone });
       let person = db.people.find((p) => p.emailKey === contact.emailKey);
       if (!person) {
@@ -49,12 +49,16 @@ export function createMemoryStore() {
           emailKey: contact.emailKey,
           phone: contact.phone,
           stripeCustomerId: '',
+          autoCommunicationsEnabled: Boolean(autoCommunicationsEnabled),
         };
         db.people.push(person);
       } else {
         person.displayName = String(displayName || person.displayName).trim();
         if (contact.email) person.email = contact.email;
         if (contact.phone) person.phone = contact.phone;
+        if (autoCommunicationsEnabled != null) {
+          person.autoCommunicationsEnabled = Boolean(autoCommunicationsEnabled);
+        }
       }
       return clone(person);
     },
@@ -64,11 +68,14 @@ export function createMemoryStore() {
       return clone(db.people.find((p) => p.emailKey === emailKey) || null);
     },
     getPerson: async (id) => clone(db.people.find((p) => p.id === id) || null),
-    async updatePerson(id, { displayName, email, phone }) {
+    async updatePerson(id, { displayName, email, phone, autoCommunicationsEnabled }) {
       const person = db.people.find((p) => p.id === id);
       if (!person) throw new NotFoundError('Person not found.');
       if (displayName != null) person.displayName = String(displayName).trim();
       if (phone != null) person.phone = String(phone).trim();
+      if (autoCommunicationsEnabled != null) {
+        person.autoCommunicationsEnabled = Boolean(autoCommunicationsEnabled);
+      }
       if (email != null) {
         const emailKey = String(email).trim().toLowerCase();
         if (!emailKey) throw new ValidationError('email is required');

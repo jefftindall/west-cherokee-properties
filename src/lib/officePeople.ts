@@ -4,6 +4,7 @@ export type OfficePerson = {
   email?: string;
   emailKey?: string;
   phone?: string;
+  autoCommunicationsEnabled?: boolean;
 };
 
 export function formatPersonContact(person: OfficePerson) {

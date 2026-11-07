@@ -43,3 +43,4 @@ West Cherokee Properties is a **rental property management** business with homes
 - `/office` is staff-only (workforce Entra). `/portal` is renters (Entra External ID). Authn ≠ authz.
 - Fair housing: one application form for everyone. Do not collect SSN or protected-class fields.
 - Stripe is the payment processor. Keep a single source of truth for charges, payments, and balances: the Azure SQL database. Do not duplicate that record in Stripe (no Stripe Invoicing) or anywhere else.
+- **Renter communications privacy:** Automatic emails/texts require per-renter consent (`people.auto_communications_enabled`, default off). Do not enable auto-comms without recorded consent. Do not add silent or scheduled tenant messages that bypass consent. One-off emails (balance/invoice notices) are allowed only via explicit staff actions (dedicated button or a default-off notify checkbox). See [`.cursor/rules/renter-communications.mdc`](.cursor/rules/renter-communications.mdc).

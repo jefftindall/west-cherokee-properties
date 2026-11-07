@@ -68,10 +68,19 @@ test('updateLease merges pet terms without dropping occupants', async () => {
 test('updatePerson changes display name and phone', async () => {
   const store = createMemoryStore();
   const person = await store.upsertPerson({ displayName: 'Jordan Tenant', email: 'jordan@example.com', phone: '4045550100' });
+  assert.equal(person.autoCommunicationsEnabled, false);
   const updated = await store.updatePerson(person.id, { displayName: 'Jordan T.', phone: '4045550199' });
   assert.equal(updated.displayName, 'Jordan T.');
   assert.equal(updated.phone, '4045550199');
   assert.equal(updated.emailKey, 'jordan@example.com');
+  assert.equal(updated.autoCommunicationsEnabled, false);
+});
+
+test('updatePerson can enable automatic communications', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const updated = await store.updatePerson(person.id, { autoCommunicationsEnabled: true });
+  assert.equal(updated.autoCommunicationsEnabled, true);
 });
 
 test('updatePerson rejects duplicate email', async () => {

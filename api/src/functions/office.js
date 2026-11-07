@@ -13,7 +13,8 @@ import { getStore } from '../lib/store.js';
 import { buildUnitDetail } from '../lib/unitDetail.js';
 import { buildDashboard, buildRentRoll } from '../lib/unitHealth.js';
 import { runInvoiceCatchUp } from '../lib/invoiceCatchUp.js';
-import { previewCommunications } from '../lib/rentCommunications.js';
+import { previewCommunications, sendLeaseBalanceNotice, sendOneOffTenantCommunication } from '../lib/rentCommunications.js';
+import { computeBalanceDue } from '../lib/unitDetail.js';
 import {
   defaultPeriodForMonthInput,
   MANUAL_PAYMENT_METHODS,
@@ -31,6 +32,7 @@ const createPersonSchema = z
     displayName: z.string().trim().min(1).max(200),
     email: z.string().trim().max(320).optional(),
     phone: z.string().trim().max(40).optional(),
+    autoCommunicationsEnabled: z.boolean().optional(),
   })
   .refine((value) => Boolean(String(value.email || '').trim() || String(value.phone || '').trim()), {
     message: 'Email or phone is required.',
@@ -226,6 +228,7 @@ app.http('officePersonPatch', {
         displayName: z.string().trim().min(1).max(200).optional(),
         email: z.email().optional(),
         phone: z.string().trim().max(40).optional(),
+        autoCommunicationsEnabled: z.boolean().optional(),
       })
       .parse(await request.json());
     const person = await getStore().updatePerson(request.params.id, body);
@@ -522,6 +525,7 @@ app.http('officeInvoicesPost', {
         leaseId: z.string().min(1),
         periodStart: z.string().min(8),
         periodEnd: z.string().min(8),
+        notify: z.boolean().optional(),
       })
       .parse(await request.json());
     const store = getStore();
@@ -538,7 +542,25 @@ app.http('officeInvoicesPost', {
       amountCents: monthlyChargeCents(lease.rentCents, lease.terms?.petCount),
       billingSource: 'office',
     });
-    return jsonOk({ invoice }, 201);
+
+    let email = { skipped: true, reason: 'notify_disabled' };
+    if (body.notify) {
+      const [person, invoices] = await Promise.all([
+        store.getPerson(lease.personId),
+        store.listInvoices(),
+      ]);
+      const balanceDueCents = computeBalanceDue(lease, invoices);
+      email = await sendOneOffTenantCommunication(store, {
+        leaseId: lease.id,
+        person,
+        messageType: 'balance_notice',
+        amountCents: balanceDueCents,
+        periodStart: body.periodStart,
+        env: process.env,
+      });
+    }
+
+    return jsonOk({ invoice, email }, 201);
   }),
 });
 
@@ -552,14 +574,29 @@ app.http('officeInvoicesCatchUpPost', {
       .object({
         leaseId: z.string().min(1).optional(),
         dryRun: z.boolean().optional(),
+        notify: z.boolean().optional(),
       })
       .parse(await request.json().catch(() => ({})));
     const result = await runInvoiceCatchUp(getStore(), {
       leaseId: body.leaseId || null,
       dryRun: Boolean(body.dryRun),
+      notify: Boolean(body.notify),
       env: process.env,
     });
     return jsonOk(result, body.dryRun ? 200 : 201);
+  }),
+});
+
+app.http('officeLeaseBalanceNoticePost', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'office/leases/{id}/communications/balance-notice',
+  handler: wrap(async (request) => {
+    await permissionGate(request, PERMISSION.INVOICES_WRITE);
+    const result = await sendLeaseBalanceNotice(getStore(), request.params.id, {
+      env: process.env,
+    });
+    return jsonOk(result, 201);
   }),
 });
 

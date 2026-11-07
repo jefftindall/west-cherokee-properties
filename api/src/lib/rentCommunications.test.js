@@ -4,7 +4,9 @@ import { createMemoryStore } from './store.js';
 import {
   buildCommunicationMessage,
   previewCommunications,
+  runRentCommunicationScheduler,
   selectCommunicationForLease,
+  sendLeaseBalanceNotice,
 } from './rentCommunications.js';
 import { parseInvoiceIdsFromMetadata, rentCommunicationsEnabled } from './stripeWebhook.js';
 
@@ -52,7 +54,11 @@ test('selectCommunicationForLease picks balance_overdue after grace with late fe
 
 test('previewCommunications lists eligible messages without sending', async () => {
   const store = createMemoryStore();
-  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const person = await store.upsertPerson({
+    displayName: 'Jordan',
+    email: 'jordan@example.com',
+    autoCommunicationsEnabled: true,
+  });
   const lease = await store.createLease({
     unitId: 'unit-124-w-cherokee-a',
     personId: person.id,
@@ -69,6 +75,29 @@ test('previewCommunications lists eligible messages without sending', async () =
   const preview = await previewCommunications(store, new Date('2026-08-01T17:00:00.000Z'));
   assert.equal(preview.messages.length, 1);
   assert.equal(preview.messages[0].messageType, 'due_reminder');
+  assert.equal(preview.messages[0].skippedReason, null);
+});
+
+test('previewCommunications marks no_consent when auto communications are off', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  await store.createInvoice({
+    leaseId: lease.id,
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    amountCents: 145000,
+  });
+  const preview = await previewCommunications(store, new Date('2026-08-01T17:00:00.000Z'));
+  assert.equal(preview.messages.length, 1);
+  assert.equal(preview.messages[0].skippedReason, 'no_consent');
+  assert.equal(preview.messages[0].autoCommunicationsEnabled, false);
 });
 
 test('buildCommunicationMessage includes tenant name, portal link, and late-fee policy', () => {
@@ -128,4 +157,92 @@ test('parseInvoiceIdsFromMetadata reads bundled invoice ids', () => {
 test('rentCommunicationsEnabled reads env flag', () => {
   assert.equal(rentCommunicationsEnabled({ RENT_COMMUNICATIONS_ENABLED: 'true' }), true);
   assert.equal(rentCommunicationsEnabled({ RENT_COMMUNICATIONS_ENABLED: 'false' }), false);
+});
+
+test('runRentCommunicationScheduler skips renters without consent', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  await store.createInvoice({
+    leaseId: lease.id,
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    amountCents: 145000,
+  });
+  const result = await runRentCommunicationScheduler(
+    store,
+    { RENT_COMMUNICATIONS_ENABLED: 'true' },
+    new Date('2026-08-01T17:00:00.000Z'),
+  );
+  assert.equal(result.sent, 0);
+  assert.equal(result.skippedNoConsent, 1);
+});
+
+test('sendLeaseBalanceNotice rejects when tenant has no email', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', phone: '4045550100' });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  await assert.rejects(
+    () =>
+      sendLeaseBalanceNotice(store, lease.id, {
+        env: {},
+        now: new Date('2026-08-01T17:00:00.000Z'),
+      }),
+    /no email/,
+  );
+});
+
+test('sendLeaseBalanceNotice rejects when already sent today', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Jordan', email: 'jordan@example.com' });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  await store.createCommunicationLog({
+    leaseId: lease.id,
+    messageType: 'due_reminder',
+    sentDate: '2026-08-01',
+    recipientEmail: person.email,
+    preview: false,
+  });
+  await assert.rejects(
+    () =>
+      sendLeaseBalanceNotice(store, lease.id, {
+        env: {
+          ACS_CONNECTION_STRING: 'endpoint=https://example.communication.azure.com/;accesskey=dGVzdA==',
+          ACS_EMAIL_SENDER: 'donotreply@example.com',
+        },
+        now: new Date('2026-08-01T17:00:00.000Z'),
+      }),
+    /already sent/,
+  );
+});
+
+test('buildCommunicationMessage balance_notice includes balance and portal link', () => {
+  const content = buildCommunicationMessage({
+    messageType: 'balance_notice',
+    person: { displayName: 'Jordan' },
+    period: { periodStart: '2026-08-01' },
+    amountCents: 145000,
+    payUrl: 'https://westcherokee.example/portal/invoices',
+  });
+  assert.match(content.subject, /balance statement/i);
+  assert.match(content.plainText, /\$1,450\.00/);
+  assert.match(content.plainText, /https:\/\/westcherokee\.example\/portal\/invoices/);
 });
