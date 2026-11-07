@@ -78,6 +78,8 @@ test('runInvoiceCatchUp creates catch-up invoices that skip late fees', async ()
     env: {},
   });
   assert.equal(result.created, 3);
+  assert.equal(result.emailed, 0);
+  assert.equal(result.leases[0].email.reason, 'notify_disabled');
   const invoices = await store.listInvoices();
   assert.equal(invoices.length, 3);
   assert.ok(invoices.every((row) => row.billingSource === 'catchup'));
@@ -85,6 +87,29 @@ test('runInvoiceCatchUp creates catch-up invoices that skip late fees', async ()
 
   const late = await applyLateFeeToInvoice(store, invoices[0], lease);
   assert.equal(late.applied, false);
+});
+
+test('runInvoiceCatchUp notify dry-run reports wouldSend without requiring consent', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({ displayName: 'Sam', email: 'sam@example.com' });
+  assert.equal(person.autoCommunicationsEnabled, false);
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-b',
+    personId: person.id,
+    startDate: '2026-08-01',
+    endDate: '2027-07-31',
+    rentCents: 155000,
+  });
+
+  const result = await runInvoiceCatchUp(store, {
+    leaseId: lease.id,
+    dryRun: true,
+    notify: true,
+    now: new Date('2026-10-15T17:00:00.000Z'),
+    env: {},
+  });
+  assert.equal(result.notify, true);
+  assert.equal(result.leases[0].email.wouldSend, true);
 });
 
 test('buildCommunicationMessage catch-up copy apologizes and waives late fee', () => {

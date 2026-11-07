@@ -43,13 +43,19 @@ BEGIN
     email NVARCHAR(320) NOT NULL,
     email_key NVARCHAR(320) NOT NULL UNIQUE,
     phone NVARCHAR(40) NULL,
-    stripe_customer_id NVARCHAR(64) NULL
+    stripe_customer_id NVARCHAR(64) NULL,
+    auto_communications_enabled BIT NOT NULL CONSTRAINT df_people_auto_comms DEFAULT 0
   );
 END;
 
 IF COL_LENGTH('dbo.people', 'stripe_customer_id') IS NULL
 BEGIN
   ALTER TABLE dbo.people ADD stripe_customer_id NVARCHAR(64) NULL;
+END;
+
+IF COL_LENGTH('dbo.people', 'auto_communications_enabled') IS NULL
+BEGIN
+  ALTER TABLE dbo.people ADD auto_communications_enabled BIT NOT NULL CONSTRAINT df_people_auto_comms DEFAULT 0;
 END;
 
 IF OBJECT_ID('dbo.office_users', 'U') IS NULL

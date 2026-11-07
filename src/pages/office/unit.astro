@@ -42,7 +42,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
         endDate: string;
         rentCents: number;
       } | null;
-      tenant?: { displayName: string; email: string } | null;
+      tenant?: {
+        id: string;
+        displayName: string;
+        email: string;
+        autoCommunicationsEnabled?: boolean;
+      } | null;
       health: Health;
       balanceDueCents: number;
       openInvoices: Array<{ id: string; periodLabel: string; amountCents: number }>;
@@ -221,7 +226,44 @@ import OfficeNav from '../../components/OfficeNav.astro';
                   .join('')}</ul>`
               : `<p class="mt-2 text-sm text-muted">${lease ? 'All invoices are paid.' : 'No open invoices.'}</p>`
           }
+          ${
+            lease
+              ? `<div class="mt-4">
+            <button id="email-balance-notice" class="btn-secondary" type="button" data-lease-id="${lease.id}">
+              Email balance notice
+            </button>
+            <p class="mt-2 text-xs text-muted">
+              One-off send. Does not require automatic-communications consent.
+            </p>
+          </div>`
+              : ''
+          }
         </article>
+
+        ${
+          tenant
+            ? `<article class="rounded-lg border border-line bg-panel p-5">
+          <h2 class="font-display text-xl text-pine">Renter communications</h2>
+          <p class="mt-2 text-sm text-muted">
+            Automatic emails and texts are off by default. Enable only after the renter has consented.
+            Staff can still send one-off balance notices with the button above.
+          </p>
+          <form id="auto-comms-form" class="mt-4 space-y-3" data-person-id="${tenant.id}">
+            <label class="flex items-start gap-2 text-sm font-semibold text-pine">
+              <input
+                id="auto-comms-enabled"
+                name="autoCommunicationsEnabled"
+                type="checkbox"
+                class="mt-1"
+                ${tenant.autoCommunicationsEnabled ? 'checked' : ''}
+              />
+              <span>Allow automatic emails and texts</span>
+            </label>
+            <button id="save-auto-comms" class="btn-primary" type="submit">Save communication preference</button>
+          </form>
+        </article>`
+            : ''
+        }
 
         ${
           leaseProgress
@@ -324,6 +366,73 @@ import OfficeNav from '../../components/OfficeNav.astro';
       });
     }
 
+    function bindCommunicationsActions() {
+      document.getElementById('auto-comms-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.target as HTMLFormElement;
+        const personId = form.dataset.personId;
+        const saveButton = document.getElementById('save-auto-comms') as HTMLButtonElement | null;
+        const enabled =
+          (document.getElementById('auto-comms-enabled') as HTMLInputElement | null)?.checked ?? false;
+        if (!personId) return;
+        clearErrorBanner(errors);
+        setButtonBusy(saveButton, true, 'Saving…');
+        try {
+          const res = await apiFetch(`/api/office/people/${encodeURIComponent(personId)}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ autoCommunicationsEnabled: enabled }),
+            onStatus: bindApiFetchStatus({ button: saveButton }),
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showErrorBanner(errors, json.error || 'Could not save communication preference.');
+            return;
+          }
+          if (status) {
+            status.textContent = enabled
+              ? 'Automatic renter communications enabled (consent required).'
+              : 'Automatic renter communications disabled.';
+          }
+        } catch (err) {
+          if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+          else showErrorBanner(errors, 'Could not save communication preference. Try again.');
+        } finally {
+          setButtonBusy(saveButton, false);
+        }
+      });
+
+      const emailBtn = document.getElementById('email-balance-notice') as HTMLButtonElement | null;
+      emailBtn?.addEventListener('click', async () => {
+        const leaseId = emailBtn.dataset.leaseId;
+        if (!leaseId) return;
+        clearErrorBanner(errors);
+        setButtonBusy(emailBtn, true, 'Sending…');
+        try {
+          const res = await apiFetch(
+            `/api/office/leases/${encodeURIComponent(leaseId)}/communications/balance-notice`,
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: '{}',
+              onStatus: bindApiFetchStatus({ button: emailBtn }),
+            },
+          );
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showErrorBanner(errors, json.error || 'Could not send balance notice.');
+            return;
+          }
+          if (status) status.textContent = 'Balance notice emailed.';
+        } catch (err) {
+          if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
+          else showErrorBanner(errors, 'Could not send balance notice. Try again.');
+        } finally {
+          setButtonBusy(emailBtn, false);
+        }
+      });
+    }
+
     function bindServiceRequestActions() {
       panel?.querySelectorAll('button.request-progress').forEach((btn) => {
         btn.addEventListener('click', async () => {
@@ -385,6 +494,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
         panel.innerHTML = renderUnitPanel(json);
         await bindAvailabilityForm();
         bindServiceRequestActions();
+        bindCommunicationsActions();
       } catch (err) {
         if (loadingHost) loadingHost.innerHTML = '';
         if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);

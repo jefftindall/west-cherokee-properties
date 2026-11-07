@@ -8,27 +8,38 @@ import OfficeNav from '../../components/OfficeNav.astro';
   <section class="mx-auto max-w-6xl px-4 py-10">
     <div id="office-back-link"></div>
     <h1 class="font-display text-4xl text-pine">Invoices</h1>
-    <form id="inv-form" class="mt-6 flex flex-wrap gap-3">
+    <form id="inv-form" class="mt-6 flex flex-wrap items-end gap-3">
       <input name="leaseId" placeholder="Lease ID" required />
       <input name="periodStart" type="date" required />
       <input name="periodEnd" type="date" required />
+      <label class="flex items-center gap-2 text-sm text-muted">
+        <input id="inv-notify" name="notify" type="checkbox" value="true" />
+        Email balance statement after create
+      </label>
       <button id="inv-submit" class="btn-primary" type="submit">Generate this period</button>
     </form>
+    <p class="mt-2 max-w-2xl text-xs text-muted">
+      Email is off by default. Checking the box sends a one-off balance notice after the invoice is
+      created — it does not require automatic-communications consent.
+    </p>
 
     <div class="mt-10 border-t border-line pt-8">
       <h2 class="font-display text-2xl text-pine">Catch up missing months</h2>
       <p class="mt-2 max-w-2xl text-sm text-muted">
         Creates open invoices for every billing month that is missing through today. Catch-up charges
-        never get an automatic late fee. Tenants receive one apologetic email listing the months posted.
-        Dry-run first, then confirm.
+        never get an automatic late fee. Email is optional and off by default. Dry-run first, then confirm.
       </p>
       <form id="catchup-form" class="mt-4 flex flex-wrap items-end gap-3">
         <div>
           <label for="catchup-lease" class="block text-sm text-muted">Lease ID (optional)</label>
           <input id="catchup-lease" name="leaseId" placeholder="All active leases" class="mt-1" />
         </div>
+        <label class="flex items-center gap-2 text-sm text-muted">
+          <input id="catchup-notify" name="notify" type="checkbox" value="true" />
+          Email balance statement after create
+        </label>
         <button id="catchup-dry" class="btn-secondary" type="submit" data-dry-run="true">Dry-run</button>
-        <button id="catchup-run" class="btn-primary" type="submit" data-dry-run="false">Create + notify</button>
+        <button id="catchup-run" class="btn-primary" type="submit" data-dry-run="false">Create</button>
       </form>
       <div id="catchup-errors" class="mt-2"></div>
       <p id="catchup-status" class="mt-2 text-sm text-muted" role="status"></p>
@@ -118,6 +129,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
             leaseId: data.get('leaseId'),
             periodStart: data.get('periodStart'),
             periodEnd: data.get('periodEnd'),
+            notify: data.get('notify') === 'true',
           }),
           onStatus: bindApiFetchStatus({ button: submit, statusEl: status }),
         });
@@ -126,7 +138,12 @@ import OfficeNav from '../../components/OfficeNav.astro';
           showErrorBanner(errors, json.error || 'Could not create invoice.');
           return;
         }
-        if (status) status.textContent = 'Invoice created.';
+        if (status) {
+          const emailed = json.email && !json.email.skipped;
+          status.textContent = emailed
+            ? 'Invoice created and balance notice emailed.'
+            : 'Invoice created.';
+        }
         load();
       } catch (err) {
         if (isApiFetchExhausted(err)) showApiExhaustedBanner(errors, err);
@@ -141,7 +158,9 @@ import OfficeNav from '../../components/OfficeNav.astro';
       const submitter = (event as SubmitEvent).submitter as HTMLButtonElement | null;
       const dryRun = submitter?.dataset.dryRun !== 'false';
       const form = event.target as HTMLFormElement;
-      const leaseId = String(new FormData(form).get('leaseId') || '').trim();
+      const formData = new FormData(form);
+      const leaseId = String(formData.get('leaseId') || '').trim();
+      const notify = formData.get('notify') === 'true';
       const busyBtn = dryRun ? catchupDry : catchupRun;
       clearErrorBanner(catchupErrors);
       if (catchupResult) catchupResult.textContent = '';
@@ -153,6 +172,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             dryRun,
+            notify,
             ...(leaseId ? { leaseId } : {}),
           }),
           onStatus: bindApiFetchStatus({ button: busyBtn, statusEl: catchupStatus }),
@@ -167,9 +187,15 @@ import OfficeNav from '../../components/OfficeNav.astro';
           0,
         );
         if (catchupStatus) {
-          catchupStatus.textContent = dryRun
-            ? `Dry-run: ${would} invoice(s) would be created across ${json.leaseCount || 0} lease(s).`
-            : `Created ${json.created || 0} invoice(s); emailed ${json.emailed || 0} lease(s).`;
+          if (dryRun) {
+            catchupStatus.textContent = notify
+              ? `Dry-run: ${would} invoice(s) would be created across ${json.leaseCount || 0} lease(s); email would be sent when notify is on.`
+              : `Dry-run: ${would} invoice(s) would be created across ${json.leaseCount || 0} lease(s) (no email).`;
+          } else {
+            catchupStatus.textContent = notify
+              ? `Created ${json.created || 0} invoice(s); emailed ${json.emailed || 0} lease(s).`
+              : `Created ${json.created || 0} invoice(s) (no email).`;
+          }
         }
         if (catchupResult) catchupResult.textContent = JSON.stringify(json, null, 2);
         if (!dryRun) load();

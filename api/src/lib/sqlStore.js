@@ -22,6 +22,18 @@ function parseJson(value, fallback) {
   }
 }
 
+const PEOPLE_SELECT =
+  'id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId, auto_communications_enabled AS autoCommunicationsEnabled';
+
+function mapPersonRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    stripeCustomerId: row.stripeCustomerId || '',
+    autoCommunicationsEnabled: Boolean(row.autoCommunicationsEnabled),
+  };
+}
+
 export function createSqlStore(connectionString) {
   let poolPromise;
 
@@ -98,32 +110,39 @@ export function createSqlStore(connectionString) {
         .query('UPDATE dbo.units SET available = @available WHERE id = @id');
       return { ...current, available };
     },
-    async upsertPerson({ displayName, email = '', phone = '' }) {
+    async upsertPerson({ displayName, email = '', phone = '', autoCommunicationsEnabled }) {
       const contact = resolvePersonContact({ email, phone });
       const p = await pool();
       const existing = await p
         .request()
         .input('emailKey', sql.NVarChar, contact.emailKey)
-        .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE email_key = @emailKey',
-        );
+        .query(`SELECT ${PEOPLE_SELECT} FROM dbo.people WHERE email_key = @emailKey`);
       if (existing.recordset[0]) {
+        const current = mapPersonRow(existing.recordset[0]);
+        const nextAuto =
+          autoCommunicationsEnabled != null
+            ? Boolean(autoCommunicationsEnabled)
+            : current.autoCommunicationsEnabled;
         await p
           .request()
-          .input('id', sql.NVarChar, existing.recordset[0].id)
+          .input('id', sql.NVarChar, current.id)
           .input('displayName', sql.NVarChar, displayName)
-          .input('email', sql.NVarChar, contact.email || existing.recordset[0].email || '')
-          .input('phone', sql.NVarChar, contact.phone || existing.recordset[0].phone || '')
-          .query('UPDATE dbo.people SET display_name = @displayName, email = @email, phone = @phone WHERE id = @id');
+          .input('email', sql.NVarChar, contact.email || current.email || '')
+          .input('phone', sql.NVarChar, contact.phone || current.phone || '')
+          .input('autoCommunicationsEnabled', sql.Bit, nextAuto)
+          .query(
+            'UPDATE dbo.people SET display_name = @displayName, email = @email, phone = @phone, auto_communications_enabled = @autoCommunicationsEnabled WHERE id = @id',
+          );
         return {
-          ...existing.recordset[0],
+          ...current,
           displayName,
-          email: contact.email || existing.recordset[0].email || '',
-          phone: contact.phone || existing.recordset[0].phone || '',
-          stripeCustomerId: existing.recordset[0].stripeCustomerId || '',
+          email: contact.email || current.email || '',
+          phone: contact.phone || current.phone || '',
+          autoCommunicationsEnabled: nextAuto,
         };
       }
       const id = `person-${randomUUID()}`;
+      const auto = Boolean(autoCommunicationsEnabled);
       await p
         .request()
         .input('id', sql.NVarChar, id)
@@ -131,45 +150,50 @@ export function createSqlStore(connectionString) {
         .input('email', sql.NVarChar, contact.email)
         .input('emailKey', sql.NVarChar, contact.emailKey)
         .input('phone', sql.NVarChar, contact.phone)
+        .input('autoCommunicationsEnabled', sql.Bit, auto)
         .query(
-          'INSERT INTO dbo.people (id, display_name, email, email_key, phone) VALUES (@id, @displayName, @email, @emailKey, @phone)',
+          'INSERT INTO dbo.people (id, display_name, email, email_key, phone, auto_communications_enabled) VALUES (@id, @displayName, @email, @emailKey, @phone, @autoCommunicationsEnabled)',
         );
-      return { id, displayName, email: contact.email, emailKey: contact.emailKey, phone: contact.phone, stripeCustomerId: '' };
+      return {
+        id,
+        displayName,
+        email: contact.email,
+        emailKey: contact.emailKey,
+        phone: contact.phone,
+        stripeCustomerId: '',
+        autoCommunicationsEnabled: auto,
+      };
     },
     async listPeople() {
       const p = await pool();
-      const result = await p
-        .request()
-        .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people',
-        );
-      return result.recordset;
+      const result = await p.request().query(`SELECT ${PEOPLE_SELECT} FROM dbo.people`);
+      return result.recordset.map(mapPersonRow);
     },
     async getPersonByEmail(email) {
       const p = await pool();
       const result = await p
         .request()
         .input('emailKey', sql.NVarChar, String(email || '').trim().toLowerCase())
-        .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE email_key = @emailKey',
-        );
-      return result.recordset[0] || null;
+        .query(`SELECT ${PEOPLE_SELECT} FROM dbo.people WHERE email_key = @emailKey`);
+      return mapPersonRow(result.recordset[0]);
     },
     async getPerson(id) {
       const p = await pool();
       const result = await p
         .request()
         .input('id', sql.NVarChar, id)
-        .query(
-          'SELECT id, display_name AS displayName, email, email_key AS emailKey, phone, stripe_customer_id AS stripeCustomerId FROM dbo.people WHERE id = @id',
-        );
-      return result.recordset[0] || null;
+        .query(`SELECT ${PEOPLE_SELECT} FROM dbo.people WHERE id = @id`);
+      return mapPersonRow(result.recordset[0]);
     },
-    async updatePerson(id, { displayName, email, phone }) {
+    async updatePerson(id, { displayName, email, phone, autoCommunicationsEnabled }) {
       const current = await this.getPerson(id);
       if (!current) throw new NotFoundError('Person not found.');
       const nextDisplayName = displayName != null ? String(displayName).trim() : current.displayName;
       const nextPhone = phone != null ? String(phone).trim() : current.phone;
+      const nextAuto =
+        autoCommunicationsEnabled != null
+          ? Boolean(autoCommunicationsEnabled)
+          : current.autoCommunicationsEnabled;
       let nextEmail = current.email;
       let nextEmailKey = current.emailKey;
       if (email != null) {
@@ -192,8 +216,9 @@ export function createSqlStore(connectionString) {
         .input('email', sql.NVarChar, nextEmail)
         .input('emailKey', sql.NVarChar, nextEmailKey)
         .input('phone', sql.NVarChar, nextPhone)
+        .input('autoCommunicationsEnabled', sql.Bit, nextAuto)
         .query(
-          'UPDATE dbo.people SET display_name = @displayName, email = @email, email_key = @emailKey, phone = @phone WHERE id = @id',
+          'UPDATE dbo.people SET display_name = @displayName, email = @email, email_key = @emailKey, phone = @phone, auto_communications_enabled = @autoCommunicationsEnabled WHERE id = @id',
         );
       return {
         ...current,
@@ -201,6 +226,7 @@ export function createSqlStore(connectionString) {
         email: nextEmail,
         emailKey: nextEmailKey,
         phone: nextPhone,
+        autoCommunicationsEnabled: nextAuto,
       };
     },
     async updatePersonStripeCustomerId(id, stripeCustomerId) {

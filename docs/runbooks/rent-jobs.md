@@ -1,6 +1,6 @@
 # Runbook: Rent jobs Function App
 
-**Last updated:** 2026-11-03
+**Last updated:** 2026-11-07
 
 Daily rent automation (late fees, then next-month charges, then tenant emails) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
 
@@ -15,7 +15,7 @@ Prod raises an Azure Monitor alert when `rentDailyJobs` has no successful log fo
 
 One run executes three steps in order inside a single Azure SQL wake window: invoice creation (10 days before the 1st), late fees (after grace), then tenant communications. A failing step does not skip the later ones; the invocation is marked failed and the per-step summary is logged to Application Insights.
 
-What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (portal online payment; charges are always created in SQL), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (tenant email; preview delivers to `CONTACT_NOTIFY_EMAIL`). The job refuses to run if `SQL_CONNECTION_STRING` is missing.
+What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (portal online payment; charges are always created in SQL), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (automatic tenant email; preview delivers to `CONTACT_NOTIFY_EMAIL`). The communications step also skips any renter whose `people.auto_communications_enabled` is off (default). Explicit office one-off emails do not use this job. The job refuses to run if `SQL_CONNECTION_STRING` is missing.
 
 ## Deploy
 

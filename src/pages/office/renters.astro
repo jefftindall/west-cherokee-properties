@@ -29,6 +29,22 @@ import OfficeNav from '../../components/OfficeNav.astro';
         <input id="phone" name="phone" type="tel" maxlength="40" autocomplete="tel" />
         <p class="mt-1 text-xs text-muted">Provide an email or phone number.</p>
       </div>
+      <div class="md:col-span-2 rounded border border-line bg-cream p-3">
+        <label class="flex items-start gap-2 text-sm font-semibold text-pine">
+          <input
+            id="autoCommunicationsEnabled"
+            name="autoCommunicationsEnabled"
+            type="checkbox"
+            class="mt-1"
+            value="true"
+          />
+          <span>Allow automatic emails and texts</span>
+        </label>
+        <p class="mt-2 text-xs text-muted">
+          Leave off until the renter has consented to automatic communications. Office staff can still
+          send one-off emails (invoice or balance notices) from explicit buttons when this is off.
+        </p>
+      </div>
       <div class="md:col-span-2 flex flex-wrap items-end gap-3">
         <button id="renter-submit" class="btn-primary" type="submit">Add renter</button>
         <button class="btn-ghost hidden" type="button" id="cancel-btn">Cancel edit</button>
@@ -76,6 +92,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
     function resetForm() {
       form?.reset();
       if (personIdInput) personIdInput.value = '';
+      const autoBox = document.getElementById('autoCommunicationsEnabled') as HTMLInputElement | null;
+      if (autoBox) autoBox.checked = false;
       if (submit) submit.textContent = 'Add renter';
       cancelBtn?.classList.add('hidden');
       if (status) status.textContent = '';
@@ -86,6 +104,8 @@ import OfficeNav from '../../components/OfficeNav.astro';
       (document.getElementById('displayName') as HTMLInputElement).value = person.displayName;
       (document.getElementById('email') as HTMLInputElement).value = person.email || '';
       (document.getElementById('phone') as HTMLInputElement).value = person.phone || '';
+      const autoBox = document.getElementById('autoCommunicationsEnabled') as HTMLInputElement | null;
+      if (autoBox) autoBox.checked = Boolean(person.autoCommunicationsEnabled);
       if (submit) submit.textContent = 'Save changes';
       cancelBtn?.classList.remove('hidden');
       if (status) status.textContent = `Editing ${person.displayName}.`;
@@ -111,14 +131,17 @@ import OfficeNav from '../../components/OfficeNav.astro';
               <th class="border-b border-line py-2 text-left">Name</th>
               <th class="border-b border-line py-2 text-left">Contact</th>
               <th class="border-b border-line py-2 text-left">Phone</th>
+              <th class="border-b border-line py-2 text-left">Auto comms</th>
               <th class="border-b border-line py-2 text-left"></th>
             </tr></thead><tbody>${rows
               .map((person) => {
                 const contact = formatPersonContact(person);
+                const auto = person.autoCommunicationsEnabled ? 'On' : 'Off';
                 return `<tr>
                   <td class="py-2">${person.displayName}</td>
                   <td>${person.email || contact || '—'}</td>
                   <td>${person.phone || '—'}</td>
+                  <td>${auto}</td>
                   <td class="py-2">
                     <button type="button" class="btn-ghost px-2 py-1 text-xs" data-edit="${person.id}">Edit</button>
                     <a class="btn-ghost px-2 py-1 text-xs" href="/office/leases?personId=${encodeURIComponent(person.id)}">Create lease</a>
@@ -158,6 +181,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
           displayName: data.get('displayName'),
           ...(email ? { email } : {}),
           phone: phone || '',
+          autoCommunicationsEnabled: data.get('autoCommunicationsEnabled') === 'true',
         };
         const res = await apiFetch(editingId ? `/api/office/people/${editingId}` : '/api/office/people', {
           method: editingId ? 'PATCH' : 'POST',
