@@ -1,19 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import OfficeNav from '../../components/OfficeNav.astro';
-
-const docTypes = {
-  'eviction-notice': {
-    title: 'Eviction notice',
-    description: 'Seven-day notice to pay rent or quit',
-    apiType: 'eviction-notice',
-  },
-  'affidavit-of-service': {
-    title: 'Affidavit of service',
-    description: 'Personal service affidavit for a served notice',
-    apiType: 'affidavit-of-service',
-  },
-};
 ---
 
 <BaseLayout title="Legal document" description="Print or download a legal notice" noIndex hideNav hideFooter>
@@ -29,7 +16,7 @@ const docTypes = {
     <div id="legal-loading" class="no-print mt-6"></div>
     <iframe id="legal-frame" title="Legal document" class="mt-6 hidden min-h-[70vh] w-full rounded-lg border border-line bg-panel"></iframe>
   </section>
-  <script define:vars={{ docTypes }}>
+  <script>
     import { apiFetch, isApiFetchExhausted } from '../../lib/apiFetch.ts';
     import {
       bindApiFetchStatus,
@@ -38,6 +25,19 @@ const docTypes = {
       showErrorBanner,
     } from '../../lib/uiFeedback.ts';
     import { mountOfficeBackLink } from '../../lib/officeNav.ts';
+
+    const docTypes = {
+      'eviction-notice': {
+        title: 'Eviction notice',
+        description: 'Seven-day notice to pay rent or quit',
+        apiType: 'eviction-notice',
+      },
+      'affidavit-of-service': {
+        title: 'Affidavit of service',
+        description: 'Personal service affidavit for a served notice',
+        apiType: 'affidavit-of-service',
+      },
+    };
 
     mountOfficeBackLink({ host: document.getElementById('office-back-link'), fallbackHref: '/office/leases' });
 
@@ -62,13 +62,15 @@ const docTypes = {
     const params = new URLSearchParams(window.location.search);
     const leaseId = params.get('leaseId');
     const typeKey = params.get('type') || 'eviction-notice';
-    const docMeta = docTypes[typeKey];
-    const optionsForm = document.getElementById('legal-options');
+    const docMeta = Object.prototype.hasOwnProperty.call(docTypes, typeKey)
+      ? docTypes[typeKey as keyof typeof docTypes]
+      : undefined;
+    const optionsForm = document.getElementById('legal-options') as HTMLFormElement | null;
     const actions = document.getElementById('legal-actions');
     const status = document.getElementById('legal-status');
     const errors = document.getElementById('legal-errors');
     const loadingHost = document.getElementById('legal-loading');
-    const frame = document.getElementById('legal-frame');
+    const frame = document.getElementById('legal-frame') as HTMLIFrameElement | null;
     const titleEl = document.getElementById('doc-title');
     const descEl = document.getElementById('doc-description');
 
@@ -77,7 +79,7 @@ const docTypes = {
     }
 
     function buildQuery() {
-      const data = new FormData(optionsForm);
+      const data = new FormData(optionsForm ?? undefined);
       const query = new URLSearchParams();
       for (const [key, value] of data.entries()) {
         const text = String(value || '').trim();
@@ -87,6 +89,7 @@ const docTypes = {
     }
 
     function documentUrl(download = false) {
+      if (!docMeta) return '#';
       const query = buildQuery();
       if (download) query.set('download', '1');
       const qs = query.toString();
@@ -137,8 +140,8 @@ const docTypes = {
           <button class="btn-ghost" type="submit" form="legal-options">Refresh preview</button>
         `;
         document.getElementById('print-legal')?.addEventListener('click', () => frame?.contentWindow?.print());
-        const downloadLink = document.getElementById('download-legal');
-        const openLink = document.getElementById('open-legal');
+        const downloadLink = document.getElementById('download-legal') as HTMLAnchorElement | null;
+        const openLink = document.getElementById('open-legal') as HTMLAnchorElement | null;
         const syncLinks = () => {
           const url = documentUrl();
           const downloadUrl = documentUrl(true);
