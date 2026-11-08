@@ -75,6 +75,9 @@ resource "azurerm_function_app_flex_consumption" "rent_jobs" {
     CONTACT_NOTIFY_EMAIL         = data.azurerm_key_vault_secret.site_contact_email.value
     ACS_CONNECTION_STRING        = data.azurerm_key_vault_secret.acs_connection_string.value
     ACS_EMAIL_SENDER             = data.azurerm_key_vault_secret.acs_email_sender.value
+    SENT_API_KEY                 = data.azurerm_key_vault_secret.sent_api_key.value
+    ALERT_PHONE                  = data.azurerm_key_vault_secret.alert_phone.value
+    SENT_SANDBOX                 = var.environment == "prod" ? "false" : "true"
     APPINSIGHTS_CONNECTIONSTRING = azurerm_application_insights.main.connection_string
     # Disabled timers still run on demand via the portal Test/Run or the master-key admin endpoint.
     "AzureWebJobs.${local.rent_jobs_function}.Disabled" = var.rent_jobs_schedule_enabled ? "false" : "true"

@@ -1,6 +1,6 @@
 # Runbook: Cost and quotas
 
-**Last updated:** 2026-09-27  
+**Last updated:** 2026-11-08  
 **Region:** East US 2 (Azure SQL in Central US)  
 **Subscription:** `5f82b068-cbaa-40bf-9d56-e9932a64a41c`  
 **Budget:** `budget-wcp-monthly` ($70/mo, 80% and 100% Actual). Alert email from `kv-wcp-shared` / `ALERT-EMAIL`.
@@ -17,8 +17,9 @@ Expected retail (order-of-magnitude, two environments):
 | Storage (Functions) × 2 | `stwcpjobsstaging`, `stwcpjobsprod`; Standard LRS, deployment package + timer locks | <1 |
 | Azure SQL wake from rent jobs | Prod daily run keeps `sql-wcp-prod` awake one auto-pause window (~1.1 h/day at 0.5 vCore) when nobody else is using it. Staging adds cost only when run on demand | ~8–10 |
 | Budget buffer | — | — |
+| Sent SMS (send.dm) | External SaaS; billed by Sent usage, not Azure. Low volume (rent notices + staff contact) | outside Azure budget |
 
-Expected total ~42–56. **Subscription budget** (bootstrap): **$70/mo** = ceil(expected × 1.25) with 80% Actual alert to `ALERT-EMAIL`.
+Expected total ~42–56 Azure. **Subscription budget** (bootstrap): **$70/mo** = ceil(expected × 1.25) with 80% Actual alert to `ALERT-EMAIL`.
 
 Do not split the rent jobs into separate timers: each timer run resets SQL's 60-minute auto-pause, so three staggered timers cost roughly three times as much SQL compute as one combined run ([rent-jobs.md](./rent-jobs.md)).
 

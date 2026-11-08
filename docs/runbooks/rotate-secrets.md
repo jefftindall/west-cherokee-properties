@@ -69,8 +69,10 @@ Terraform `lifecycle.ignore_changes = [value]` on these secrets: vault updates s
 | `TURNSTILE-SITE-KEY` | Cloudflare Turnstile → Site key (CD build reads this into `PUBLIC_TURNSTILE_SITE_KEY`) | command above |
 | `TURNSTILE-SECRET-KEY` | Cloudflare Turnstile → Secret key | `--file` into `kv-wcp-shared` |
 | `ALERT-EMAIL` | Budget / monitor inbox | `--file` into `kv-wcp-shared` |
+| `ALERT-PHONE` | Staff SMS pager / SMS preview sink (E.164 or US 10-digit) | `--file` into `kv-wcp-shared` |
 | `ACS-CONNECTION-STRING` | Azure Communication Services | `--file` into `kv-wcp-shared` |
 | `ACS-EMAIL-SENDER` | ACS MailFrom address | `--file` into `kv-wcp-shared` |
+| `SENT-API-KEY` | Sent (send.dm) API key for SMS | `--file` into `kv-wcp-shared` |
 | `ALLOWED-USER-IDS` | Workforce Entra object IDs (comma-separated) | `--file` into `kv-wcp-shared` |
 | `EXTERNAL-ID-CLIENT-ID` | External ID app registration | `--file` into `kv-wcp-shared` |
 | `EXTERNAL-ID-CLIENT-SECRET` | External ID app → new client secret | `--file` into `kv-wcp-shared` |
@@ -90,7 +92,7 @@ CI mints a short-lived installation token from `GITHUB-APP-PRIVATE-KEY`. Generat
 
 To recreate the whole app, re-run `node scripts/register-wcp-github-app.mjs` after bootstrap placeholders exist.
 
-After `TURNSTILE-SECRET-KEY`, `ACS-*`, `ALLOWED-USER-IDS`, External ID, or Stripe keys change, re-apply the env stacks so SWA and rent jobs Function App (`func-wcp-jobs-<env>`: Stripe, `ACS-*`, `SITE-CONTACT-EMAIL`) `app_settings` pick them up (those values are interpolated at apply time):
+After `TURNSTILE-SECRET-KEY`, `ACS-*`, `SENT-API-KEY`, `ALERT-PHONE`, `ALLOWED-USER-IDS`, External ID, or Stripe keys change, re-apply the env stacks so SWA and rent jobs Function App (`func-wcp-jobs-<env>`: Stripe, `ACS-*`, `SENT_*`, `ALERT_PHONE`, `SITE-CONTACT-EMAIL`) `app_settings` pick them up (those values are interpolated at apply time):
 
 ```bash
 cd infra/environments/staging

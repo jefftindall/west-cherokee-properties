@@ -194,12 +194,27 @@ BEGIN
     lease_id NVARCHAR(64) NOT NULL REFERENCES dbo.leases(id),
     message_type NVARCHAR(32) NOT NULL,
     sent_date DATE NOT NULL,
-    recipient_email NVARCHAR(320) NOT NULL,
+    recipient_email NVARCHAR(320) NOT NULL CONSTRAINT df_comm_log_recipient_email DEFAULT '',
     preview BIT NOT NULL CONSTRAINT df_comm_log_preview DEFAULT 0,
     period_start DATE NULL,
     created_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
     CONSTRAINT ux_comm_log_lease_sent_date UNIQUE (lease_id, sent_date)
   );
+END;
+
+IF COL_LENGTH('dbo.communication_log', 'recipient_phone') IS NULL
+BEGIN
+  ALTER TABLE dbo.communication_log ADD recipient_phone NVARCHAR(32) NULL;
+END;
+
+IF COL_LENGTH('dbo.communication_log', 'email_sent') IS NULL
+BEGIN
+  ALTER TABLE dbo.communication_log ADD email_sent BIT NOT NULL CONSTRAINT df_comm_log_email_sent DEFAULT 0;
+END;
+
+IF COL_LENGTH('dbo.communication_log', 'sms_sent') IS NULL
+BEGIN
+  ALTER TABLE dbo.communication_log ADD sms_sent BIT NOT NULL CONSTRAINT df_comm_log_sms_sent DEFAULT 0;
 END;
 
 -- Partial payments: amount applied so far. An invoice is 'paid' only when paid_cents >= amount_cents.

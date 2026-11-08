@@ -1,10 +1,10 @@
 # Runbook: Rent jobs Function App
 
-**Last updated:** 2026-11-07
+**Last updated:** 2026-11-08
 
-Daily rent automation (late fees, then next-month charges, then tenant emails) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
+Daily rent automation (late fees, then next-month charges, then tenant email/SMS) runs in a standalone Flex Consumption Function App per environment: `func-wcp-jobs-staging`, `func-wcp-jobs-prod`. It is separate from the site's SWA managed Functions, which only support HTTP triggers.
 
-The invoice step creates charges on the lead day (10 days before the 1st, Eastern) **and** for up to **3 prior calendar days** if that run was missed, so a short outage still posts the month while tenants have notice. Late fees still apply to those scheduler invoices. If the outage is longer, use staff [invoice catch-up](./rent-invoice-catch-up.md) (no automatic late fee; apologetic email).
+The invoice step creates charges on the lead day (10 days before the 1st, Eastern) **and** for up to **3 prior calendar days** if that run was missed, so a short outage still posts the month while tenants have notice. Late fees still apply to those scheduler invoices. If the outage is longer, use staff [invoice catch-up](./rent-invoice-catch-up.md) (no automatic late fee; apologetic dual-channel notice).
 
 Prod raises an Azure Monitor alert when `rentDailyJobs` has no successful log for **48 hours** (email to shared-KV `ALERT-EMAIL`). Staging’s timer is off, so that alert is not created there.
 
@@ -15,7 +15,7 @@ Prod raises an Azure Monitor alert when `rentDailyJobs` has no successful log fo
 
 One run executes three steps in order inside a single Azure SQL wake window: invoice creation (10 days before the 1st), late fees (after grace), then tenant communications. A failing step does not skip the later ones; the invocation is marked failed and the per-step summary is logged to Application Insights.
 
-What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (portal online payment; charges are always created in SQL), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (automatic tenant email; preview delivers to `CONTACT_NOTIFY_EMAIL`). The communications step also skips any renter whose `people.auto_communications_enabled` is off (default). Explicit office one-off emails do not use this job. The job refuses to run if `SQL_CONNECTION_STRING` is missing.
+What each step actually does is still gated by app settings from Terraform: `RENT_PAYMENTS_ENABLED` (portal online payment; charges are always created in SQL), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (automatic tenant email/SMS; preview delivers email to `CONTACT_NOTIFY_EMAIL` and SMS to `ALERT_PHONE`). SMS uses Sent (`SENT_API_KEY`; `SENT_SANDBOX=true` on non-prod). The communications step also skips any renter whose `people.auto_communications_enabled` is off (default). Explicit office one-off notices do not use this job. The job refuses to run if `SQL_CONNECTION_STRING` is missing.
 
 ## Deploy
 
@@ -23,7 +23,7 @@ Terraform (`infra/modules/site/rent_jobs.tf`) creates the app, plan, and storage
 
 ## Run on demand (staging, or a prod re-run)
 
-The runs are idempotent: invoices are keyed per lease and period, late fees apply once per invoice, and `communication_log` allows one email per lease per New York day.
+The runs are idempotent: invoices are keyed per lease and period, late fees apply once per invoice, and `communication_log` allows one communication event per lease per New York day.
 
 **Portal (preferred):** Function App `func-wcp-jobs-staging` → Functions → `rentDailyJobs` → Code + Test → Test/Run → Run. Disabled timers still run from Test/Run because the portal uses the master key.
 

@@ -1,6 +1,6 @@
 # Phased delivery
 
-_Last updated: 2026-11-03. Azure SQL is in Central US (East US / East US 2 still `ProvisioningDisabled`). Env Terraform applies inside `CD: main` after merge when `infra/` changed. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned. Office operations portal phase 2 (automated billing + tenant comms) is done; renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md)._
+_Last updated: 2026-11-08. Azure SQL is in Central US (East US / East US 2 still `ProvisioningDisabled`). Env Terraform applies inside `CD: main` after merge when `infra/` changed. Public site closed applications while all units are leased. Waitlist is backlog. Lease prepare/print/download exists; in-app eSign (Entra + emailed code, every adult signs) is planned. Office operations portal phase 2 (automated billing + tenant email/SMS via ACS + Sent) is done; renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md)._
 
 | Phase | Status | Notes |
 |-------|--------|-------|
@@ -17,4 +17,4 @@ _Last updated: 2026-11-03. Azure SQL is in Central US (East US / East US 2 still
 | 8 Invoices, payments, receipts | done | SQL charges + Stripe Checkout (full or partial, $100 minimum) + webhook; feature flag |
 | 9 Service requests | done | Portal create; office triage |
 | 10 Release hardening | done | CD build-once, smoke, budget, runbooks |
-| Office operations | in_progress | Phase 1–2 done (dashboard, manual pay, automated billing/comms). Renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md) |
+| Office operations | in_progress | Phase 1–2 done (dashboard, manual pay, automated billing, dual email/SMS). Renewals, digest, workflow paging remain — [office-operations.md](./office-operations.md) |

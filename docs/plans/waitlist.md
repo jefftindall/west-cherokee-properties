@@ -31,7 +31,7 @@ Every unit is leased today. The public site closes `/apply` until a unit is mark
 ## Out of scope
 
 - Ranking, deposits, or “first in line gets the key”.
-- SMS unless we already have a reviewed messaging path.
+- Waitlist SMS blasts (Sent exists for rent/ops; waitlist texts stay out until product work adds them).
 
 ## Revision notes
 

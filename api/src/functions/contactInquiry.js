@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { newCorrelationId } from '../lib/auth.js';
 import { failureResponse, jsonOk } from '../lib/httpErrors.js';
 import { sendInquiryEmail } from '../lib/acsNotify.js';
+import { alertPhoneE164, sendStaffSms, sentConfigured } from '../lib/sentNotify.js';
 import { verifyTurnstile } from '../lib/turnstile.js';
 
 const inquirySchema = z.object({
@@ -38,6 +39,15 @@ app.http('contactInquiry', {
         request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined;
       await verifyTurnstile(parsed.data.turnstileToken, remoteIp);
       await sendInquiryEmail({ ...parsed.data, correlationId });
+      if (sentConfigured() && alertPhoneE164()) {
+        try {
+          await sendStaffSms({
+            text: `WCP contact from ${parsed.data.name} (${parsed.data.email}). Check staff inbox. Ref ${correlationId}`,
+          });
+        } catch {
+          // Email already delivered; staff SMS is best-effort.
+        }
+      }
       return jsonOk({ ok: true, correlationId });
     } catch (err) {
       const failure = failureResponse(err, correlationId);

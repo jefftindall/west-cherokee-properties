@@ -1,12 +1,14 @@
 import { sendTenantEmail } from './acsNotify.js';
 import { invoiceRemainingCents } from './invoices.js';
 import { formatMoney } from './leaseTerms.js';
+import { toE164 } from './people.js';
 import {
   billingPeriodsForLookback,
   currentMonthPeriodFromNow,
   nyTodayIso,
 } from './rentBilling.js';
 import { MIN_PARTIAL_PAYMENT_CENTS } from './rentPayments.js';
+import { sentConfigured, sendTenantSms } from './sentNotify.js';
 import {
   expectedMonthlyChargeCents,
   GRACE_DAYS,
@@ -116,6 +118,98 @@ export function buildCommunicationMessage({
   };
 }
 
+/** Short SMS twin of buildCommunicationMessage (dual-channel). */
+export function buildCommunicationSms({
+  messageType,
+  person,
+  period,
+  amountCents,
+  payUrl = portalPayUrl(),
+  catchupMonths = [],
+}) {
+  const tenant = person?.displayName || 'Tenant';
+  const month = period ? monthLabel(period.periodStart) : 'this month';
+  const amount = formatMoney(amountCents);
+  const monthsList =
+    (catchupMonths || []).length > 0
+      ? catchupMonths.map((iso) => monthLabel(iso)).join(', ')
+      : month;
+
+  const lines = {
+    balance_overdue: `WCP: ${tenant}, rent for ${month} is past due. Balance ${amount}. Pay: ${payUrl}`,
+    grace_warning: `WCP: ${tenant}, rent for ${month} is in grace. Balance ${amount}. Pay in full by the 4th to avoid a ${formatMoney(LATE_FEE_CENTS)} late fee. ${payUrl}`,
+    due_reminder: `WCP: ${tenant}, rent for ${month} is due today. Balance ${amount}. ${payUrl}`,
+    invoice_notice: `WCP: ${tenant}, ${month} rent charge posted. Balance due on the 1st: ${amount}. ${payUrl}`,
+    invoice_catchup_notice: `WCP: ${tenant}, catch-up rent posted (${monthsList}). No late fee on these. Balance ${amount}. ${payUrl}`,
+    balance_notice: `WCP: ${tenant}, rent balance statement: ${amount}. ${payUrl}`,
+  };
+
+  return lines[messageType] || lines.due_reminder;
+}
+
+function personPhoneE164(person) {
+  return toE164(person?.phone || '');
+}
+
+function channelPlan(person, env = process.env) {
+  const email = String(person?.email || '').trim();
+  const phone = personPhoneE164(person);
+  const canEmail = Boolean(email);
+  const canSms = Boolean(phone) && sentConfigured(env);
+  return { email, phone, canEmail, canSms, canSend: canEmail || canSms };
+}
+
+async function deliverDualChannels({
+  person,
+  content,
+  smsText,
+  preview,
+  env,
+}) {
+  const plan = channelPlan(person, env);
+  const result = {
+    emailSent: false,
+    smsSent: false,
+    recipientEmail: '',
+    recipientPhone: '',
+    emailError: null,
+    smsError: null,
+  };
+
+  if (plan.canEmail) {
+    try {
+      await sendTenantEmail({
+        to: plan.email,
+        subject: content.subject,
+        plainText: content.plainText,
+        preview,
+        env,
+      });
+      result.emailSent = true;
+      result.recipientEmail = preview ? String(env.CONTACT_NOTIFY_EMAIL || plan.email) : plan.email;
+    } catch (err) {
+      result.emailError = err instanceof Error ? err.message : 'email_failed';
+    }
+  }
+
+  if (plan.canSms) {
+    try {
+      const sms = await sendTenantSms({
+        to: plan.phone,
+        text: smsText,
+        preview,
+        env,
+      });
+      result.smsSent = true;
+      result.recipientPhone = sms.to;
+    } catch (err) {
+      result.smsError = err instanceof Error ? err.message : 'sms_failed';
+    }
+  }
+
+  return result;
+}
+
 export function selectCommunicationForLease({
   lease,
   invoices,
@@ -217,16 +311,26 @@ export async function previewCommunications(store, now = new Date()) {
       amountCents: selected.amountCents,
     });
     const hasConsent = personAllowsAutoCommunications(person);
+    const phone = personPhoneE164(person);
+    const email = String(person?.email || '').trim();
+    const smsConfigured = sentConfigured();
+    let skippedReason = null;
+    if (!hasConsent) skippedReason = 'no_consent';
+    else if (!email && !phone) skippedReason = 'no_tenant_contact';
+    else if (!email && phone && !smsConfigured) skippedReason = 'sent_not_configured';
+
     rows.push({
       leaseId: lease.id,
       tenant: person?.displayName || lease.personId,
-      email: person?.email || '',
+      email,
+      phone: phone || '',
+      smsEligible: Boolean(phone) && smsConfigured,
       messageType: selected.messageType,
       periodStart: selected.period?.periodStart || '',
       amountCents: selected.amountCents,
       alreadySentToday: Boolean(existing),
       autoCommunicationsEnabled: hasConsent,
-      skippedReason: hasConsent ? null : 'no_consent',
+      skippedReason,
       subject: content.subject,
     });
   }
@@ -235,8 +339,9 @@ export async function previewCommunications(store, now = new Date()) {
 }
 
 /**
- * Explicit staff one-off tenant email. Does not require per-renter auto consent
- * or RENT_COMMUNICATIONS_ENABLED. Preview still redirects to CONTACT_NOTIFY_EMAIL.
+ * Explicit staff one-off tenant notice (email and/or SMS). Does not require
+ * per-renter auto consent or RENT_COMMUNICATIONS_ENABLED. Preview redirects
+ * email to CONTACT_NOTIFY_EMAIL and SMS to ALERT_PHONE.
  */
 export async function sendOneOffTenantCommunication(
   store,
@@ -253,9 +358,9 @@ export async function sendOneOffTenantCommunication(
 ) {
   const preview = rentCommunicationsPreview(env);
   const today = nyTodayIso(now);
-  const email = String(person?.email || '').trim();
-  if (!email) {
-    return { skipped: true, reason: 'no_tenant_email' };
+  const plan = channelPlan(person, env);
+  if (!plan.canSend) {
+    return { skipped: true, reason: 'no_tenant_contact' };
   }
 
   const existingLog = await store.getCommunicationLogForLeaseDate(leaseId, today);
@@ -271,20 +376,37 @@ export async function sendOneOffTenantCommunication(
     payUrl: portalPayUrl(env),
     catchupMonths,
   });
+  const smsText = buildCommunicationSms({
+    messageType,
+    person,
+    period: { periodStart },
+    amountCents,
+    payUrl: portalPayUrl(env),
+    catchupMonths,
+  });
 
-  await sendTenantEmail({
-    to: email,
-    subject: content.subject,
-    plainText: content.plainText,
+  const delivery = await deliverDualChannels({
+    person,
+    content,
+    smsText,
     preview,
     env,
   });
+
+  if (!delivery.emailSent && !delivery.smsSent) {
+    const err = new Error(delivery.emailError || delivery.smsError || 'Failed to send notice');
+    err.name = 'ContactAcsError';
+    throw err;
+  }
 
   await store.createCommunicationLog({
     leaseId,
     messageType,
     sentDate: today,
-    recipientEmail: preview ? String(env.CONTACT_NOTIFY_EMAIL || email) : email,
+    recipientEmail: delivery.recipientEmail || '',
+    recipientPhone: delivery.recipientPhone || '',
+    emailSent: delivery.emailSent,
+    smsSent: delivery.smsSent,
     preview,
     periodStart: periodStart || undefined,
   });
@@ -298,7 +420,17 @@ export async function sendOneOffTenantCommunication(
   }
   await store.upsertTenantCommunicationState(leaseId, statePatch);
 
-  return { skipped: false, sent: true, preview, subject: content.subject, messageType };
+  return {
+    skipped: false,
+    sent: true,
+    preview,
+    subject: content.subject,
+    messageType,
+    emailSent: delivery.emailSent,
+    smsSent: delivery.smsSent,
+    emailError: delivery.emailError,
+    smsError: delivery.smsError,
+  };
 }
 
 export async function sendLeaseBalanceNotice(store, leaseId, { env = process.env, now = new Date() } = {}) {
@@ -336,13 +468,13 @@ export async function sendLeaseBalanceNotice(store, leaseId, { env = process.env
     now,
   });
 
-  if (result.skipped && result.reason === 'no_tenant_email') {
-    const err = new Error('Tenant has no email on file.');
+  if (result.skipped && result.reason === 'no_tenant_contact') {
+    const err = new Error('Tenant has no email or phone on file.');
     err.name = 'ValidationError';
     throw err;
   }
   if (result.skipped && result.reason === 'already_sent_today') {
-    const err = new Error('A tenant email was already sent for this lease today.');
+    const err = new Error('A tenant notice was already sent for this lease today.');
     err.name = 'ConflictError';
     throw err;
   }
@@ -351,6 +483,7 @@ export async function sendLeaseBalanceNotice(store, leaseId, { env = process.env
     leaseId: lease.id,
     tenant: person.displayName,
     email: person.email,
+    phone: person.phone,
     amountCents,
     ...result,
   };
@@ -374,30 +507,62 @@ export async function runRentCommunicationScheduler(store, env = process.env, no
       skippedNoConsent += 1;
       continue;
     }
-    if (row.alreadySentToday || !row.email) continue;
+    if (row.skippedReason || row.alreadySentToday) continue;
+    if (!row.email && !row.phone) continue;
     try {
+      const person = {
+        displayName: row.tenant,
+        email: row.email,
+        phone: row.phone,
+      };
       const content = buildCommunicationMessage({
         messageType: row.messageType,
-        person: { displayName: row.tenant, email: row.email },
+        person,
+        period: { periodStart: row.periodStart },
+        amountCents: row.amountCents,
+        payUrl: portalPayUrl(env),
+      });
+      const smsText = buildCommunicationSms({
+        messageType: row.messageType,
+        person,
         period: { periodStart: row.periodStart },
         amountCents: row.amountCents,
         payUrl: portalPayUrl(env),
       });
 
+      let delivery = {
+        emailSent: false,
+        smsSent: false,
+        recipientEmail: '',
+        recipientPhone: '',
+        emailError: null,
+        smsError: null,
+      };
       if (enabled || preview) {
-        await sendTenantEmail({
-          to: row.email,
-          subject: content.subject,
-          plainText: content.plainText,
+        delivery = await deliverDualChannels({
+          person,
+          content,
+          smsText,
           preview,
+          env,
         });
+        if (!delivery.emailSent && !delivery.smsSent) {
+          errors.push({
+            leaseId: row.leaseId,
+            error: delivery.emailError || delivery.smsError || 'send_failed',
+          });
+          continue;
+        }
       }
 
       await store.createCommunicationLog({
         leaseId: row.leaseId,
         messageType: row.messageType,
         sentDate: today,
-        recipientEmail: preview ? String(env.CONTACT_NOTIFY_EMAIL || row.email) : row.email,
+        recipientEmail: delivery.recipientEmail || '',
+        recipientPhone: delivery.recipientPhone || '',
+        emailSent: delivery.emailSent,
+        smsSent: delivery.smsSent,
         preview,
         periodStart: row.periodStart || undefined,
       });

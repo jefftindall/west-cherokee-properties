@@ -634,7 +634,8 @@ export function createSqlStore(connectionString) {
         .query(
           `SELECT id, lease_id AS leaseId, message_type AS messageType,
                   CONVERT(char(10), sent_date, 23) AS sentDate,
-                  recipient_email AS recipientEmail, preview,
+                  recipient_email AS recipientEmail, recipient_phone AS recipientPhone,
+                  email_sent AS emailSent, sms_sent AS smsSent, preview,
                   CONVERT(char(10), period_start, 23) AS periodStart,
                   created_at AS createdAt
            FROM dbo.communication_log WHERE lease_id = @leaseId AND sent_date = @sentDate`,
@@ -651,12 +652,17 @@ export function createSqlStore(connectionString) {
           .input('leaseId', sql.NVarChar, input.leaseId)
           .input('messageType', sql.NVarChar, input.messageType)
           .input('sentDate', sql.Date, input.sentDate)
-          .input('recipientEmail', sql.NVarChar, input.recipientEmail)
+          .input('recipientEmail', sql.NVarChar, input.recipientEmail || '')
+          .input('recipientPhone', sql.NVarChar, input.recipientPhone || null)
+          .input('emailSent', sql.Bit, input.emailSent ? 1 : 0)
+          .input('smsSent', sql.Bit, input.smsSent ? 1 : 0)
           .input('preview', sql.Bit, input.preview ? 1 : 0)
           .input('periodStart', sql.Date, input.periodStart || null)
           .query(
-            `INSERT INTO dbo.communication_log (id, lease_id, message_type, sent_date, recipient_email, preview, period_start)
-             VALUES (@id, @leaseId, @messageType, @sentDate, @recipientEmail, @preview, @periodStart)`,
+            `INSERT INTO dbo.communication_log
+              (id, lease_id, message_type, sent_date, recipient_email, recipient_phone, email_sent, sms_sent, preview, period_start)
+             VALUES
+              (@id, @leaseId, @messageType, @sentDate, @recipientEmail, @recipientPhone, @emailSent, @smsSent, @preview, @periodStart)`,
           );
       } catch (err) {
         if (String(err.message || '').includes('ux_comm_log_lease_sent_date')) {
@@ -672,7 +678,8 @@ export function createSqlStore(connectionString) {
         ? await p.request().input('leaseId', sql.NVarChar, leaseId).query(
             `SELECT id, lease_id AS leaseId, message_type AS messageType,
                     CONVERT(char(10), sent_date, 23) AS sentDate,
-                    recipient_email AS recipientEmail, preview,
+                    recipient_email AS recipientEmail, recipient_phone AS recipientPhone,
+                    email_sent AS emailSent, sms_sent AS smsSent, preview,
                     CONVERT(char(10), period_start, 23) AS periodStart,
                     created_at AS createdAt
              FROM dbo.communication_log WHERE lease_id = @leaseId ORDER BY sent_date DESC`,
@@ -680,7 +687,8 @@ export function createSqlStore(connectionString) {
         : await p.request().query(
             `SELECT id, lease_id AS leaseId, message_type AS messageType,
                     CONVERT(char(10), sent_date, 23) AS sentDate,
-                    recipient_email AS recipientEmail, preview,
+                    recipient_email AS recipientEmail, recipient_phone AS recipientPhone,
+                    email_sent AS emailSent, sms_sent AS smsSent, preview,
                     CONVERT(char(10), period_start, 23) AS periodStart,
                     created_at AS createdAt
              FROM dbo.communication_log ORDER BY sent_date DESC`,

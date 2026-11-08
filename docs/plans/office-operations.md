@@ -1,9 +1,9 @@
 # Office operations portal
 
 **Audience:** Agents, implementers  
-**Last updated:** 2026-11-07  
-**Status:** in_progress (phase 2 complete)  
-**Depends on:** phases 7–9 (leases, payments, service requests), ACS email, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
+**Last updated:** 2026-11-08  
+**Status:** in_progress (phase 2 complete; Sent SMS dual-channel for renters + staff contact)  
+**Depends on:** phases 7–9 (leases, payments, service requests), ACS email, Sent SMS, [`lease-esign.md`](./lease-esign.md) for executed renewals, [`data-persistence.md`](../architecture/data-persistence.md)
 
 Extend `/office` from thin CRUD into an operational portal: property dashboard with unit health (green / yellow / red), automated rent billing and tenant communications, lease renewal workflow starting 90 days before expiration, structured rent increases, service-request cost tracking, weekly staff digest emails, and workflow monitoring with SMS paging. Azure SQL is the single source of truth for charges, payments, and balances; Stripe only processes payments.
 
@@ -73,9 +73,12 @@ Site is `output: 'static'`. Do **not** use runtime Astro `[id].astro` for SQL re
 | OP-15 | planned | 5 | `officeWeeklyDigest` timer; `OFFICE_DIGEST_ENABLED`; PM/super-admin recipients |
 | OP-16 | planned | 5 | Digest preview API |
 | OP-17 | planned | 6 | `workflow_runs`, `workflow_incidents`; `workflowMonitor.js` on all timers |
-| OP-18 | planned | 6 | SMS pager (`ALERT-PHONE`, ACS SMS); hourly repeat max once per 24h per incident |
+| OP-18 | planned | 6 | SMS pager (`ALERT-PHONE`, Sent SMS via `sendStaffSms`); hourly repeat max once per 24h per incident |
 | OP-19 | planned | 6 | `/office/operations` UI; Azure Monitor backup alerts |
-| OP-20 | planned | 6 | Runbook `docs/runbooks/workflow-monitoring.md`; rotate-secrets entry for `ALERT-PHONE` |
+| OP-20 | planned | 6 | Runbook `docs/runbooks/workflow-monitoring.md`; rotate-secrets entry for `ALERT-PHONE` / `SENT-API-KEY` |
+| OP-30 | done | 2 | Sent client (`sentNotify.js`), shared-KV `SENT-API-KEY` + `ALERT-PHONE`, SWA/jobs wiring, `SENT_SANDBOX` on non-prod |
+| OP-31 | done | 2 | Dual-channel renter comms (ACS email + Sent SMS) under same consent/one-off/preview gates; `communication_log` channel columns |
+| OP-32 | done | 2 | Contact-form staff SMS to `ALERT-PHONE` (best-effort after ACS email) |
 | OP-21 | done | 1 | Manual payment entry (`POST /api/office/payments`); dashboard rent roll (current + next month) with progress |
 | OP-22 | done | 1 | Unit manage detail — balance due, lease progress, recent payments, open/closed service requests on `/office/unit?unitId=` |
 | OP-25 | done | 2 | Invoice scheduler 3-day Eastern lookback; `invoice_notice` eligible in the same window; `billing_source=scheduler` |
@@ -100,17 +103,17 @@ Suggested PR sequence: OP-01–04 → OP-05–09 → OP-10–12 → OP-13–14 �
 
 **Consent:** `people.auto_communications_enabled` defaults off. Enable only after customer consent (office renters + unit manage UI). Daily auto emails/texts require consent **and** `RENT_COMMUNICATIONS_*`. Preview lists eligible messages with `skippedReason: no_consent` when consent is missing.
 
-**One email per lease per calendar day:** state-driven selection (priority: balance_overdue → grace_warning → due_reminder → invoice_notice). No queue replay after outage. Transactional gate before ACS send; unique constraint on `(lease_id, sent_date)`.
+**One communication event per lease per calendar day:** state-driven selection (priority: balance_overdue → grace_warning → due_reminder → invoice_notice). Dual-channel: ACS email when email is on file, Sent SMS when phone + `SENT_API_KEY` are configured. Log if either channel succeeds. No queue replay after outage. Unique constraint on `(lease_id, sent_date)`.
 
-**Portal payments:** tenants choose the amount on `/portal/invoices`, never in Stripe. Minimum $100 (or the full balance when it is under $100), maximum the balance not already processing. The page and the due/grace emails state that the $50 late fee is added unless the full balance is paid by the end of the grace period.
+**Portal payments:** tenants choose the amount on `/portal/invoices`, never in Stripe. Minimum $100 (or the full balance when it is under $100), maximum the balance not already processing. The page and the due/grace emails (and SMS twins) state that the $50 late fee is added unless the full balance is paid by the end of the grace period.
 
-**Feature flags:** `RENT_PAYMENTS_ENABLED` (online payment), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (auto scheduler + preview inbox). One-off staff sends use ACS without requiring `ENABLED`; preview still redirects to `CONTACT_NOTIFY_EMAIL`.
+**Feature flags:** `RENT_PAYMENTS_ENABLED` (online payment), `RENT_COMMUNICATIONS_ENABLED` / `RENT_COMMUNICATIONS_PREVIEW` (auto scheduler + preview inbox). One-off staff sends use ACS/Sent without requiring `ENABLED`; preview redirects email to `CONTACT_NOTIFY_EMAIL` and SMS to `ALERT_PHONE`. Staging sets `SENT_SANDBOX=true`.
 
 **Hosting:** timers cannot run on SWA managed Functions (HTTP triggers only). All timers live in `api/src/jobs/` and deploy to the standalone jobs Function App ([rent-jobs.md](../runbooks/rent-jobs.md)). Prefer adding steps to an existing daily run over new timers: each separate run wakes Azure SQL serverless for another 60-minute auto-pause window. Future timers (OP-15 digest, OP-17 monitor) follow the same pattern.
 
 ## Workflow monitoring
 
-Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_incidents`. Site admin SMS via `ALERT-PHONE` immediately, then at most once per 24 hours until resolved. `WORKFLOW_PAGING_ENABLED` / `WORKFLOW_PAGING_PREVIEW`. Azure Monitor action group as backup if pager path fails.
+Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_incidents`. Site admin SMS via Sent to `ALERT-PHONE` immediately, then at most once per 24 hours until resolved. `WORKFLOW_PAGING_ENABLED` / `WORKFLOW_PAGING_PREVIEW`. Azure Monitor action group as backup if pager path fails. Contact form already texts `ALERT-PHONE` best-effort after the staff email.
 
 ## Acceptance criteria
 
@@ -120,8 +123,9 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 - [x] Tenants can pay in full or in part (minimum $100) from the portal; amount is fixed before Stripe Checkout
 - [x] Portal and emails state that only payment in full within the grace period avoids the late fee
 - [x] Tenant auto-comms follow schedule; gated by `RENT_COMMUNICATIONS_*` **and** per-renter consent (default off); preview before live
-- [x] At most one tenant email per lease per day; no automatic email backlog after outage; staff catch-up/create email only when `notify` is explicitly on
-- [x] Staff can send one-off balance notices without auto-comms consent
+- [x] At most one tenant communication event per lease per day (email and/or SMS); no automatic backlog after outage; staff catch-up/create notify only when `notify` is explicitly on
+- [x] Staff can send one-off balance notices (email + SMS) without auto-comms consent
+- [x] Sent SMS dual-channel for renters; staff contact SMS to `ALERT-PHONE`
 - [x] Late fee auto-applies after grace on scheduler invoices; catch-up invoices are late-fee exempt; red only after fee applied (or prior-month arrears)
 - [x] Staff can dry-run and run invoice catch-up from `/office/invoices`
 - [x] Prod alerts when `rentDailyJobs` is silent for 48 hours
@@ -137,11 +141,13 @@ Every timer wrapped in `runMonitoredJob`. Failure or missed run opens `workflow_
 
 - Second ledger or manual Stripe edits for routine rent
 - Third-party eSign (see lease-esign plan)
-- Tenant SMS (ACS email only unless reviewed path added)
+- Tradesmen/vendor directory or dispatch SMS (future product)
+- WhatsApp/RCS / Sent inbound webhooks / STOP UI (carrier STOP + consent)
 - Ranking or auto-approval from waitlist
 
 ## Revision notes
 
+- 2026-11-08: OP-30–32 — Sent (`send.dm`) SMS dual-channel with ACS email for renters; staff contact SMS to `ALERT-PHONE`; OP-18 pager provider is Sent (not ACS SMS).
 - 2026-11-07: OP-29 — per-renter `auto_communications_enabled` (default off) with consent notice; daily auto scheduler skips without consent; catch-up/create `notify` default off; unit **Email balance notice** one-off; agent rule `renter-communications.mdc`.
 - 2026-11-03: Invoice resilience — 3-day scheduler lookback (late fees still apply); staff catch-up API/UI with apologetic email and no auto late fee; prod 48h missed-run alert; runbook `rent-invoice-catch-up.md` (OP-25–28).
 - 2026-11-03: Unit health — yellow (grace) only when the *current* month is the sole unpaid period; prior-month arrears (open or missing invoices) are always red, including on the 2nd–4th.

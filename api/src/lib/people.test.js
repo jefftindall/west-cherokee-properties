@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatPhoneDisplay, normalizePhoneDigits, resolvePersonContact } from './people.js';
+import { formatPhoneDisplay, normalizePhoneDigits, resolvePersonContact, toE164 } from './people.js';
 
 test('resolvePersonContact accepts email', () => {
   const contact = resolvePersonContact({ email: 'Jordan@Example.com', phone: '4045550100' });
@@ -22,4 +22,10 @@ test('resolvePersonContact rejects missing contact', () => {
 test('normalizePhoneDigits strips country code', () => {
   assert.equal(normalizePhoneDigits('1-404-555-0100'), '4045550100');
   assert.equal(formatPhoneDisplay('4045550100'), '(404) 555-0100');
+});
+
+test('toE164 builds US E.164', () => {
+  assert.equal(toE164('(404) 555-0100'), '+14045550100');
+  assert.equal(toE164('14045550100'), '+14045550100');
+  assert.equal(toE164('bad'), '');
 });
