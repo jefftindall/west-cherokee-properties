@@ -13,6 +13,13 @@ export function formatPhoneDisplay(digits) {
   return `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6)}`;
 }
 
+/** US numbers → E.164 (+1XXXXXXXXXX). Returns '' when not a 10-digit US number. */
+export function toE164(phone) {
+  const digits = normalizePhoneDigits(phone);
+  if (digits.length !== 10) return '';
+  return `+1${digits}`;
+}
+
 export function resolvePersonContact({ email = '', phone = '' } = {}) {
   const trimmedEmail = String(email || '').trim().toLowerCase();
   const phoneDigits = normalizePhoneDigits(phone);

@@ -89,6 +89,9 @@ resource "azurerm_static_web_app" "main" {
     CONTACT_NOTIFY_EMAIL         = data.azurerm_key_vault_secret.site_contact_email.value
     ACS_CONNECTION_STRING        = data.azurerm_key_vault_secret.acs_connection_string.value
     ACS_EMAIL_SENDER             = data.azurerm_key_vault_secret.acs_email_sender.value
+    SENT_API_KEY                 = data.azurerm_key_vault_secret.sent_api_key.value
+    ALERT_PHONE                  = data.azurerm_key_vault_secret.alert_phone.value
+    SENT_SANDBOX                 = var.environment == "prod" ? "false" : "true"
     ALLOWED_USER_IDS             = data.azurerm_key_vault_secret.allowed_user_ids.value
     AAD_CLIENT_ID                = azuread_application.swa.client_id
     AAD_CLIENT_SECRET            = azuread_application_password.swa.value

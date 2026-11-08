@@ -89,6 +89,28 @@ resource "azurerm_key_vault_secret" "alert_email" {
   }
 }
 
+resource "azurerm_key_vault_secret" "alert_phone" {
+  name         = "ALERT-PHONE"
+  value        = "REPLACE_ME"
+  key_vault_id = azurerm_key_vault.shared.id
+  depends_on   = [azurerm_role_assignment.shared_kv_admin]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+resource "azurerm_key_vault_secret" "sent_api_key" {
+  name         = "SENT-API-KEY"
+  value        = "REPLACE_ME"
+  key_vault_id = azurerm_key_vault.shared.id
+  depends_on   = [azurerm_role_assignment.shared_kv_admin]
+
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
 resource "azurerm_key_vault_secret" "acs_connection_string" {
   name         = "ACS-CONNECTION-STRING"
   value        = "REPLACE_ME"

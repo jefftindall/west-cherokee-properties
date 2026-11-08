@@ -13,6 +13,16 @@ data "azurerm_key_vault_secret" "alert_email" {
   key_vault_id = data.azurerm_key_vault.shared.id
 }
 
+data "azurerm_key_vault_secret" "alert_phone" {
+  name         = "ALERT-PHONE"
+  key_vault_id = data.azurerm_key_vault.shared.id
+}
+
+data "azurerm_key_vault_secret" "sent_api_key" {
+  name         = "SENT-API-KEY"
+  key_vault_id = data.azurerm_key_vault.shared.id
+}
+
 data "azurerm_key_vault_secret" "turnstile_secret" {
   name         = "TURNSTILE-SECRET-KEY"
   key_vault_id = data.azurerm_key_vault.shared.id

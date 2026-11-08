@@ -76,7 +76,7 @@ The lease is **fully executed** only when every required signer row has `signed_
 - Changing public apply or waitlist.
 - Inventing rent charges outside Stripe.
 - Storing wet-ink scans in git.
-- SMS codes (ACS email only unless a reviewed SMS path exists later).
+- SMS codes (signing codes stay on ACS email; Sent SMS is for rent/ops notices, not eSign).
 - Letting a visitor sign from a magic link without External ID / workforce login.
 - A second “household login” that one roommate uses to sign for everyone.
 

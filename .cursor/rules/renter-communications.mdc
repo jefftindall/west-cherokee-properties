@@ -4,6 +4,7 @@ globs:
   - api/src/lib/rentCommunications.js
   - api/src/lib/invoiceCatchUp.js
   - api/src/lib/acsNotify.js
+  - api/src/lib/sentNotify.js
   - api/src/functions/office.js
   - api/src/jobs/**
   - src/pages/office/**
@@ -16,12 +17,14 @@ globs:
 
 Automatic emails and texts to renters require **per-renter consent** (`people.auto_communications_enabled`, default off).
 
+Tenant SMS uses Sent (`sentNotify.js`) dual-channel with ACS email. Same consent and one-off rules apply to both channels.
+
 ## Rules for agents
 
 - Never enable automatic communications without staff recording consent on the person record.
 - Never add silent, scheduled, or bulk tenant email/SMS paths that bypass consent.
 - One-off tenant messages are allowed only via **explicit staff actions** (dedicated button or a default-off `notify` checkbox the office manager opts into).
-- Creating invoices must not imply email. Catch-up and period create default to `notify: false`.
-- `RENT_COMMUNICATIONS_ENABLED` / `PREVIEW` gate the **daily auto scheduler** (plus preview routing). They do not replace per-renter consent. One-off sends use ACS directly; preview still redirects to `CONTACT_NOTIFY_EMAIL`.
-- Staff/ops digests and alert SMS (office pager) are not renter communications and are out of scope for this rule.
-- Do not invent tenant SMS until product work adds it; consent wording may already cover future texts under the same flag.
+- Creating invoices must not imply email/SMS. Catch-up and period create default to `notify: false`.
+- `RENT_COMMUNICATIONS_ENABLED` / `PREVIEW` gate the **daily auto scheduler** (plus preview routing). They do not replace per-renter consent. One-off sends use ACS/Sent directly; preview still redirects email to `CONTACT_NOTIFY_EMAIL` and SMS to `ALERT_PHONE`.
+- Staff/ops digests and alert SMS (office pager via Sent + `ALERT_PHONE`) are not renter communications and are out of scope for this rule.
+- Dual-send: attempt email when on file and SMS when phone + Sent are configured; log when either channel succeeds.

@@ -14,20 +14,20 @@ import OfficeNav from '../../components/OfficeNav.astro';
       <input name="periodEnd" type="date" required />
       <label class="flex items-center gap-2 text-sm text-muted">
         <input id="inv-notify" name="notify" type="checkbox" value="true" />
-        Email balance statement after create
+        Email and text balance statement after create
       </label>
       <button id="inv-submit" class="btn-primary" type="submit">Generate this period</button>
     </form>
     <p class="mt-2 max-w-2xl text-xs text-muted">
-      Email is off by default. Checking the box sends a one-off balance notice after the invoice is
-      created — it does not require automatic-communications consent.
+      Notify is off by default. Checking the box sends a one-off email and text (when phone is on file)
+      after the invoice is created — it does not require automatic-communications consent.
     </p>
 
     <div class="mt-10 border-t border-line pt-8">
       <h2 class="font-display text-2xl text-pine">Catch up missing months</h2>
       <p class="mt-2 max-w-2xl text-sm text-muted">
         Creates open invoices for every billing month that is missing through today. Catch-up charges
-        never get an automatic late fee. Email is optional and off by default. Dry-run first, then confirm.
+        never get an automatic late fee. Notify (email and text) is optional and off by default. Dry-run first, then confirm.
       </p>
       <form id="catchup-form" class="mt-4 flex flex-wrap items-end gap-3">
         <div>
@@ -36,7 +36,7 @@ import OfficeNav from '../../components/OfficeNav.astro';
         </div>
         <label class="flex items-center gap-2 text-sm text-muted">
           <input id="catchup-notify" name="notify" type="checkbox" value="true" />
-          Email balance statement after create
+          Email and text balance statement after create
         </label>
         <button id="catchup-dry" class="btn-secondary" type="submit" data-dry-run="true">Dry-run</button>
         <button id="catchup-run" class="btn-primary" type="submit" data-dry-run="false">Create</button>

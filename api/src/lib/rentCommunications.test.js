@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createMemoryStore } from './store.js';
 import {
   buildCommunicationMessage,
+  buildCommunicationSms,
   previewCommunications,
   runRentCommunicationScheduler,
   selectCommunicationForLease,
@@ -184,7 +185,7 @@ test('runRentCommunicationScheduler skips renters without consent', async () => 
   assert.equal(result.skippedNoConsent, 1);
 });
 
-test('sendLeaseBalanceNotice rejects when tenant has no email', async () => {
+test('sendLeaseBalanceNotice rejects when tenant has no reachable channel', async () => {
   const store = createMemoryStore();
   const person = await store.upsertPerson({ displayName: 'Jordan', phone: '4045550100' });
   const lease = await store.createLease({
@@ -200,8 +201,47 @@ test('sendLeaseBalanceNotice rejects when tenant has no email', async () => {
         env: {},
         now: new Date('2026-08-01T17:00:00.000Z'),
       }),
-    /no email/,
+    /no email or phone/,
   );
+});
+
+test('buildCommunicationSms includes balance and portal link', () => {
+  const text = buildCommunicationSms({
+    messageType: 'balance_notice',
+    person: { displayName: 'Jordan' },
+    period: { periodStart: '2026-08-01' },
+    amountCents: 145000,
+    payUrl: 'https://westcherokee.example/portal/invoices',
+  });
+  assert.match(text, /Jordan/);
+  assert.match(text, /\$1,450\.00/);
+  assert.match(text, /https:\/\/westcherokee\.example\/portal\/invoices/);
+});
+
+test('previewCommunications includes phone and smsEligible', async () => {
+  const store = createMemoryStore();
+  const person = await store.upsertPerson({
+    displayName: 'Jordan',
+    email: 'jordan@example.com',
+    phone: '4045550100',
+    autoCommunicationsEnabled: true,
+  });
+  const lease = await store.createLease({
+    unitId: 'unit-124-w-cherokee-a',
+    personId: person.id,
+    startDate: '2026-01-01',
+    endDate: '2027-01-01',
+    rentCents: 145000,
+  });
+  await store.createInvoice({
+    leaseId: lease.id,
+    periodStart: '2026-08-01',
+    periodEnd: '2026-08-31',
+    amountCents: 145000,
+  });
+  const preview = await previewCommunications(store, new Date('2026-08-01T17:00:00.000Z'));
+  assert.equal(preview.messages[0].phone, '+14045550100');
+  assert.equal(preview.messages[0].smsEligible, false);
 });
 
 test('sendLeaseBalanceNotice rejects when already sent today', async () => {
